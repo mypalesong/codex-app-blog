@@ -502,7 +502,7 @@ docker run myapp
     <div class="viewer-stage" id="viewerStage">
       <img id="viewerImg" src="" alt="확대 이미지">
     </div>
-    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+    <div class="viewer-hint">마우스 휠 / 두 손가락 핀치: 확대·축소 · 드래그: 이동 · Esc: 닫기</div>
   </div>
 </div>
 
@@ -578,7 +578,7 @@ docker run myapp
     apply();
   }, { passive: false });
 
-  // 드래그 이동
+  // 드래그 이동 (마우스)
   stage.addEventListener('mousedown', function (e) {
     e.preventDefault();
     dragging = true;
@@ -604,6 +604,94 @@ docker run myapp
     if (Math.abs(scale - 1) < 0.01) fitToStage();
     else centerAt(1);
   });
+
+  // ---------- 터치: 한 손가락 드래그 · 두 손가락 핀치 줌 · 더블탭 ----------
+  var gesture = null; // 'pan' | 'pinch' | null
+  var startScale = 1, startDist = 0, startMidX = 0, startMidY = 0, startTx = 0, startTy = 0;
+  var panLastX = 0, panLastY = 0;
+  var lastTapTime = 0;
+  var hadMultiTouch = false;
+
+  function touchDist(t0, t1) {
+    return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+  }
+  function touchMid(t0, t1, rect) {
+    return {
+      x: (t0.clientX + t1.clientX) / 2 - rect.left,
+      y: (t0.clientY + t1.clientY) / 2 - rect.top
+    };
+  }
+  function beginGesture(touches) {
+    if (touches.length >= 2) {
+      var rect = stage.getBoundingClientRect();
+      gesture = 'pinch';
+      startDist = touchDist(touches[0], touches[1]);
+      startScale = scale;
+      var mid = touchMid(touches[0], touches[1], rect);
+      startMidX = mid.x;
+      startMidY = mid.y;
+      startTx = tx;
+      startTy = ty;
+    } else if (touches.length === 1) {
+      gesture = 'pan';
+      panLastX = touches[0].clientX;
+      panLastY = touches[0].clientY;
+    } else {
+      gesture = null;
+    }
+  }
+
+  stage.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 1) hadMultiTouch = false;
+    if (e.touches.length >= 2) hadMultiTouch = true;
+    beginGesture(e.touches);
+  }, { passive: true });
+
+  stage.addEventListener('touchmove', function (e) {
+    if (gesture === 'pinch' && e.touches.length >= 2) {
+      e.preventDefault();
+      var dist = touchDist(e.touches[0], e.touches[1]);
+      var factor = dist / startDist;
+      var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, startScale * factor));
+      var applied = next / startScale;
+      tx = startMidX - (startMidX - startTx) * applied;
+      ty = startMidY - (startMidY - startTy) * applied;
+      scale = next;
+      apply();
+    } else if (gesture === 'pan' && e.touches.length === 1) {
+      e.preventDefault();
+      var t = e.touches[0];
+      tx += t.clientX - panLastX;
+      ty += t.clientY - panLastY;
+      panLastX = t.clientX;
+      panLastY = t.clientY;
+      apply();
+    } else {
+      // 손가락 개수가 바뀌면(핀치↔드래그 전환) 기준점을 다시 잡는다
+      beginGesture(e.touches);
+    }
+  }, { passive: false });
+
+  function onTouchEnd(e) {
+    if (e.touches.length === 0) {
+      var wasPan = gesture === 'pan' && !hadMultiTouch;
+      gesture = null;
+      if (wasPan) {
+        var now = Date.now();
+        if (now - lastTapTime < 320) {
+          if (Math.abs(scale - 1) < 0.01) fitToStage();
+          else centerAt(1);
+          lastTapTime = 0;
+        } else {
+          lastTapTime = now;
+        }
+      }
+    } else {
+      beginGesture(e.touches);
+    }
+  }
+  stage.addEventListener('touchend', onTouchEnd);
+  stage.addEventListener('touchcancel', function () { gesture = null; });
 
   // 상단 버튼 / 배경 클릭 / Esc
   document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
