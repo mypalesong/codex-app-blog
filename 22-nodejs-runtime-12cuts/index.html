@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Node.js — 브라우저 밖에서 실행되는 자바스크립트 | 12컷 이미지 스토리</title>
+<meta name="description" content="무대 위 배우와 백스테이지 배우에 비유해, Node.js가 어떻게 브라우저 밖에서 자바스크립트를 실행시키는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #f0d43a;
+    --be: #4ecb8d;
+    --fe-deep: #8a6d00;
+    --be-deep: #1f7a3d;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(240,212,58,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(240,212,58,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(31,122,61,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (컷 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #5c4700, #8a6d00); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #14532d, #1f7a3d); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (컷 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(240,212,58,0.12); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(78,203,141,0.12); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (컷 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (컷 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (컷 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.be-th { background: rgba(78,203,141,0.14); color: var(--be); }
+  table.tradeoff thead th.neutral-th { background: var(--panel-2); color: var(--ink-soft); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 실전 체크리스트 (컷 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (컷 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 서버 런타임(JavaScript Runtime) · 12컷 이미지 스토리 #22</div>
+    <h1>Node.js,<br>브라우저 밖에서 실행되는 자바스크립트</h1>
+    <p class="subtitle">같은 배우가 무대 위와 무대 뒤 양쪽에서 연기하듯, 자바스크립트가 브라우저 밖 서버에서도 일하게 된 이야기를 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">Browser</span><span class="vs">vs</span><span class="be">Node.js</span></div>
+  </header>
+
+  <section class="intro">
+    <p>우리가 브라우저 안에서 당연하게 써온 자바스크립트는 원래 딱 한 곳, 화려한 조명이 켜진 <strong class="fe-t">무대</strong> 위에서만 움직이도록 태어난 언어였습니다. 그런데 2009년 등장한 <strong class="be-t">Node.js</strong>가 이 배우를 무대 밖, 즉 어둡고 실용적인 <strong class="be-t">백스테이지</strong>로 데리고 나오면서 이야기가 달라졌습니다. 이 글에서는 같은 배우가 어떻게 무대 위와 무대 뒤 양쪽에서 일할 수 있게 되었는지, 그 원리와 쓰임새를 12컷으로 하나씩 짚어봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 하나의 언어, 두 개의 무대 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 무대와 백스테이지로 갈라진 화면, Node.js는 V8 엔진을 무대 밖으로 꺼낸 런타임이라는 정의, Node.js와 Python 서버 비교, 한 문장으로 정리한 Node.js 정의">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>무대 위 배우가 무대 뒤에서도 일한다면</h3></div>
+      <p class="key-msg">원래 브라우저 안에서만 실행되던 자바스크립트가, Node.js 덕분에 서버 컴퓨터에서도 그대로 실행될 수 있게 되었다.</p>
+      <p class="body">자바스크립트는 원래 <span class="fe-t">웹브라우저</span> 안에서만 실행되도록 만들어진 언어였습니다. 버튼을 눌렀을 때 화면이 바뀌는 것 같은 동작을 담당했죠. 그런데 2009년 <span class="be-t">Node.js</span>가 등장하면서, 같은 자바스크립트 문법으로 브라우저 없이도 컴퓨터, 즉 서버에서 직접 프로그램을 실행할 수 있게 되었습니다. 무대 위에서 노란 조명을 받던 배우가, 무대 뒤 초록빛 백스테이지에서도 똑같은 얼굴로 일하게 된 셈입니다. 지금부터 하나의 언어가 어떻게 무대 위와 무대 뒤 양쪽에서 일할 수 있게 되었는지 열두 장면으로 살펴봅니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: 런타임이라는 무대 장치</h3></div>
+      <p class="key-msg">Node.js는 브라우저 밖에서도 자바스크립트 코드를 실행할 수 있게 해주는 런타임이며, 이 덕분에 자바스크립트로 서버를 만들 수 있다.</p>
+      <p class="body">Node.js는 구글 크롬 브라우저에 쓰이는 자바스크립트 엔진 <code>V8</code>을 브라우저 밖으로 꺼내어, 독립된 프로그램으로 만든 결과물입니다. 브라우저는 원래 이 엔진을 이용해 화면 위의 자바스크립트 코드를 해석하고 실행하는데, Node.js는 이 엔진만 따로 떼어내 컴퓨터 어디서든 자바스크립트 파일을 실행할 수 있게 해줍니다. 그 결과 개발자는 <span class="fe-t">브라우저 화면</span>과 <span class="be-t">서버</span>를 같은 언어인 자바스크립트로 모두 작성할 수 있게 되었습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: Node.js와 다른 서버 언어</h3></div>
+      <p class="key-msg">Node.js로 만든 서버는 Python의 서버 프레임워크들과 목적은 같지만, 사용하는 언어와 생태계가 다르다.</p>
+      <p class="body"><span class="be-t">Node.js</span>와 Python 기반 서버(FastAPI, Django 등)는 둘 다 요청을 받아 처리하고 응답을 돌려주는 서버를 만들 수 있다는 점에서 목적이 같습니다. 다만 Node.js는 자바스크립트 문법을 쓰고, 프론트엔드도 자바스크립트(React 등)로 짜여 있는 경우가 많아 언어 하나로 앞뒤를 통일한다는 장점이 있습니다. <code>npm</code> 생태계 위에서 돌아가는 Node.js와 <code>pip</code> 생태계 위에서 돌아가는 Python 서버 중 어떤 프로젝트를 선택하느냐는, 결국 어떤 언어로 통일하고 싶은가, 팀이 어떤 언어에 익숙한가의 문제에 가깝습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>한 문장으로 정리하면</h3></div>
+      <p class="key-msg">Node.js는 브라우저의 자바스크립트 엔진을 꺼내어, 서버에서도 자바스크립트를 실행할 수 있게 만든 런타임이다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">BROWSER</div>
+            <div class="what">무대 위에서만<br>사는 자바스크립트</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">NODE.JS</div>
+            <div class="what">서버에서도<br>도는 자바스크립트</div>
+          </div>
+        </div>
+        <div class="tag">definition</div>
+      </div>
+      <p class="body">이 한 문장만 기억해도 왜 자바스크립트 개발자가 프론트엔드뿐 아니라 백엔드까지 같은 언어로 다룰 수 있게 되었는지 이해할 수 있습니다. 브라우저 안에서만 살던 배우가, 이제는 무대 뒤에서도 자유롭게 움직이게 된 것입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 생태계와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: npm·Express·Socket.io 등 백스테이지 도구 카탈로그, 이벤트 루프 순환 다이어그램, 서버용 Node.js와 빌드 도구용 Node.js의 경계, server.js 네 줄로 서버를 여는 코드">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>생태계 카탈로그: 백스테이지의 도구들</h3></div>
+      <p class="key-msg">Node.js 곁에는 서버 프레임워크 Express, 패키지 관리자 npm, 실시간 통신을 돕는 Socket.io 같은 도구들이 있어 활용 범위를 넓혀준다.</p>
+      <p class="body">Node.js 자체는 자바스크립트를 실행하는 최소한의 엔진일 뿐이고, 실제 서버를 편하게 만들려면 주변 도구들이 필요합니다. <code>npm</code>은 필요한 라이브러리를 설치해주는 패키지 관리자이고, <code>Express</code>는 요청을 받아 응답하는 서버를 몇 줄 만에 만들 수 있게 해주는 프레임워크입니다. <code>Socket.io</code>는 채팅처럼 실시간으로 데이터를 주고받는 기능을 쉽게 만들어주고, <code>Next.js</code>는 프론트엔드와 백엔드를 한 프로젝트에 담아주며, <code>PM2</code>는 서버가 죽지 않고 계속 돌아가도록 관리해주는 도구입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 한 명의 배우가 여러 역할을 동시에 처리하는 법</h3></div>
+      <p class="key-msg">Node.js는 하나의 스레드로 동작하지만 이벤트 루프라는 구조 덕분에 여러 요청을 기다리는 동안 다른 일을 처리할 수 있다.</p>
+      <div class="flow">
+        <span class="node n-user">요청 도착</span><span class="arrow">→</span>
+        <span class="node n-be">이벤트 루프</span><span class="arrow">→</span>
+        <span class="node n-api">백그라운드 작업 (I/O)</span><span class="arrow">→</span>
+        <span class="node n-be">다음 요청 계속 접수</span><span class="arrow">→</span>
+        <span class="node n-be">완료 콜백 처리</span><span class="arrow">→</span>
+        <span class="node n-user">응답 전송</span>
+      </div>
+      <p class="body">사용자가 요청을 보내면 Node.js는 그 요청을 <span class="be-t">이벤트 루프</span>가 접수합니다. 파일을 읽거나 데이터베이스를 조회하는 것처럼 시간이 걸리는 작업은 일단 백그라운드에 맡겨두고, 그 사이 다음 요청을 먼저 처리한 뒤, 맡겨둔 작업이 끝나면 다시 돌아와 결과를 처리하는 방식입니다. 한 명의 배우가 여러 손님의 주문을 순서대로 접수하면서도, 오래 걸리는 요리는 미리 주방에 넘겨두고 다음 손님을 응대하는 것과 비슷합니다. <code>event loop</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 서버용 Node.js와 도구용 Node.js</h3></div>
+      <p class="key-msg">Node.js는 실제 서버를 운영하는 데도 쓰이지만, React나 Vite 같은 프론트엔드 도구를 실행하기 위한 배경 엔진으로도 쓰인다.</p>
+      <p class="body">Node.js라는 이름을 들으면 곧바로 &lsquo;서버&rsquo;를 떠올리기 쉽지만, 실제로는 서버를 운영하는 용도 말고도 훨씬 넓게 쓰입니다. React 프로젝트를 개발할 때 화면을 미리 보여주는 개발 서버나, <code>Vite</code>·<code>Webpack</code> 같은 도구로 코드를 압축하고 번들링하는 과정도 뒤에서는 Node.js가 실행하고 있습니다. 즉, 화면에 보이는 서비스가 자바스크립트로 짜여 있다면 그 뒤에는 거의 항상 Node.js가 어떤 형태로든 관여하고 있다고 보아도 무방합니다. <code>same runtime, different jobs</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 차이: 세 줄로 여는 서버</h3></div>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">server.js — 서버 코드 작성</div>
+          <pre><span class="cm">// 도구 불러오기</span>
+<span class="kw">const</span> express = require(<span class="st">'express'</span>);
+<span class="kw">const</span> app = express();
+
+app.get(<span class="st">'/'</span>, (req, res) => {
+  res.send(<span class="st">'hello'</span>); <span class="cm">// 요청에 응답하기</span>
+});
+
+app.listen(<span class="st">3000</span>); <span class="cm">// 문 열기</span></pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">터미널 — 서버 실행</div>
+          <pre><span class="cm">$ node server.js</span>
+&gt; 서버가 3000번 방에서 대기 중
+&gt; GET / 200 OK</pre>
+        </div>
+      </div>
+      <p class="key-msg">Node.js와 Express를 함께 쓰면 몇 줄 안 되는 코드만으로 요청을 받아 응답하는 웹 서버를 열 수 있다.</p>
+      <p class="body">Node.js 위에서 <code>Express</code>라는 프레임워크를 함께 쓰면, <code>require('express')</code>로 도구를 불러오고, <code>app.get(...)</code>으로 어떤 주소에 어떻게 응답할지 정한 뒤, <code>app.listen(3000)</code>으로 서버를 열기까지 단 몇 줄이면 충분합니다. 이렇게 만든 서버는 실제로 3000번 같은 포트에서 요청을 기다리고 있다가, 누군가 접속하면 정해둔 응답을 돌려줍니다. 브라우저에서만 쓰던 익숙한 자바스크립트 문법 그대로 서버까지 만들 수 있다는 점이 Node.js의 가장 큰 매력입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 이벤트 루프를 막는 흔한 실수, Node.js의 강점과 한계를 보여주는 트레이드오프 표, nodemon과 PM2로 서버를 지키는 실전 팁, 브라우저 안과 밖을 가르는 판별법과 핵심 요약">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 오래 걸리는 일을 무대 위에서 그대로 붙잡고 있는 것</h3></div>
+      <p class="key-msg">시간이 오래 걸리는 작업을 이벤트 루프를 막는 방식으로 처리하면, 그 사이 다른 모든 요청이 함께 멈춰버리는 문제가 생긴다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ blocking the event loop</div>
+        <p>Node.js는 한 번에 한 가지만 처리하는 단일 스레드로 동작하기 때문에, 어떤 코드가 아주 오래 걸리는 계산을 &lsquo;기다리는 방식&rsquo;으로 처리해버리면 그 사이 다른 모든 요청도 함께 멈춰버립니다. 무거운 짐을 배우 혼자 낑낑대며 드는 동안, 뒤에 줄 선 손님들은 전부 그대로 멈춰 서 있는 것과 같습니다.</p>
+        <div class="ok-label">✓ use async / non-blocking</div>
+        <p>그래서 파일 읽기, 데이터베이스 조회, 외부 API 호출처럼 시간이 걸리는 작업은 결과를 기다리는 동안 다른 일도 처리할 수 있는 비동기(<code>async</code>) 방식으로 작성하는 것이 Node.js에서 특히 중요합니다. 무거운 일은 별도의 짐꾼에게 넘기고, 배우는 계속 다음 손님을 받아야 합니다.</p>
+      </div>
+      <p class="body">문제가 생기는 지점은 언제나 같습니다 — 오래 걸리는 일을 붙잡고 놓아주지 않는 코드. 무거운 일은 항상 따로 맡기고, 무대 위의 배우는 다음 손님을 받으러 움직여야 합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 배우의 강점과 한계</h3></div>
+      <p class="key-msg">동시 접속 처리, 언어 통일성, 무거운 연산 처리라는 축에서 Node.js는 뚜렷한 장단점을 가진다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>great at juggling, not built for heavy lifting</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="be-th">Node.js</th>
+              <th class="neutral-th">무거운 연산 특화 언어들</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">가벼운 동시 접속 처리</td><td>여러 창구를 빠르게 오가며 처리</td><td>한 창구씩 천천히 처리</td></tr>
+            <tr><td class="axis">언어 통일성 (프론트+백)</td><td>같은 언어로 앞뒤를 통일</td><td>프론트와 다른 언어 사용</td></tr>
+            <tr><td class="axis">무거운 계산 처리</td><td>단일 스레드라 부담 (약함)</td><td>전용 처리로 여유 (강함)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">Node.js는 채팅, 알림, 실시간 대시보드처럼 짧은 요청이 아주 많이 몰리는 상황을 가볍게 처리하는 데 강점이 있고, 프론트엔드와 같은 자바스크립트 언어를 쓸 수 있어 팀 전체의 언어를 통일하기 좋습니다. 반면 이미지 처리나 복잡한 수치 연산처럼 CPU를 오래 붙잡는 무거운 작업에는 단일 스레드 구조가 오히려 발목을 잡을 수 있어, 이런 영역은 다른 언어나 별도의 처리 방식과 함께 쓰이는 경우가 많습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>실전 팁: 서버가 꺼지지 않게 지켜보기</h3></div>
+      <p class="key-msg">개발 중에는 코드가 바뀔 때마다 서버를 자동으로 재시작해주는 nodemon 같은 도구를, 운영 중에는 서버가 죽으면 다시 살려주는 PM2 같은 도구를 쓰는 것이 실전에서 유용하다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🛠 개발 중 → <span class="fe-t">nodemon</span></h4>
+          <ul>
+            <li>코드가 바뀌면 자동 재시작</li>
+            <li>서버를 직접 껐다 켤 필요 없음</li>
+            <li>빠른 피드백 루프</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🛠 운영 중 → <span class="be-t">PM2</span></h4>
+          <ul>
+            <li>서버가 죽으면 즉시 재시작</li>
+            <li>로그를 주기적으로 확인</li>
+            <li>서비스 중단 시간 최소화</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">개발하는 동안 코드를 고칠 때마다 서버를 직접 껐다 켜는 것은 번거로우므로, <code>nodemon</code> 같은 도구를 쓰면 파일이 저장될 때마다 서버가 자동으로 재시작됩니다. 실제로 서비스를 운영할 때는 예기치 못한 오류로 서버 프로세스가 죽는 경우가 있는데, <code>PM2</code> 같은 프로세스 관리 도구를 쓰면 서버가 꺼지자마자 자동으로 다시 켜주어 서비스 중단 시간을 최소화할 수 있습니다. 무대의 조명이 꺼지지 않도록 뒤에서 계속 지켜보는 관리자를 두는 셈입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>판별법과 핵심 요약: 같은 배우, 다른 무대</h3></div>
+      <p class="key-msg">브라우저 안에서 실행되면 그냥 자바스크립트이고, 브라우저 없이 컴퓨터에서 직접 실행되면 그것은 Node.js 위에서 돌아가는 것이다.</p>
+      <p class="body">가장 간단한 판별법은 이것입니다. 자바스크립트 코드가 브라우저 화면 안에서 돌아가고 있다면 그냥 자바스크립트이고, 브라우저 없이 터미널에서 <code>node server.js</code>처럼 실행되고 있다면 그것은 <span class="be-t">Node.js</span> 위에서 돌아가는 것입니다. 같은 배우가 무대 위에서는 화면을 꾸미고, 무대 뒤에서는 요청을 받아 응답을 만드는 것처럼, 하나의 언어가 프론트엔드와 백엔드 양쪽에서 일할 수 있게 된 것이 Node.js가 가져온 가장 큰 변화입니다.</p>
+      <div class="chips">
+        <span class="chip">브라우저의 엔진을 꺼내온 것</span>
+        <span class="chip">서버도 자바스크립트로</span>
+        <span class="chip">이벤트 루프로 동시 처리</span>
+        <span class="chip">무거운 일은 비동기로</span>
+        <span class="chip">서버 도구로도 쓰인다</span>
+        <span class="chip">판별법: 브라우저 없이 실행되면 Node.js</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">하나의 언어, 두 개의 무대</div>
+    <p>자바스크립트는 무대 위에서 화면을 그리고, Node.js는 무대 뒤에서 데이터를 처리하며 그 화면에 필요한 응답을 돌려줍니다.<br>조명이 켜진 무대와 불이 꺼지지 않는 백스테이지처럼, 같은 배우가 두 장소에서 각자의 역할을 다하며 하나의 애플리케이션을 완성합니다.</p>
+    <span class="sig">node.js, understood</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

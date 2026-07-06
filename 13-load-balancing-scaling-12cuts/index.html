@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로드 밸런싱과 스케일링 — 트래픽 폭주에도 버티는 법 | 12컷 이미지 스토리</title>
+<meta name="description" content="여러 계산대가 있는 마트에 비유해, 로드 밸런서와 스케일링이 트래픽 폭주 속에서 서비스를 어떻게 지켜내는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #6ea8ff;
+    --be: #a3e635;
+    --fe-deep: #2563eb;
+    --be-deep: #65a30d;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(37,99,235,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37,99,235,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(37,99,235,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (컷 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #1c4bb8, #3b74e8); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #3f6b0a, #7fb529); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (컷 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(37,99,235,0.12); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(101,163,13,0.14); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (컷 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (컷 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (컷 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(37,99,235,0.18); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(101,163,13,0.2); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 선택 가이드 (컷 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (컷 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 아키텍처 · DevOps · 12컷 이미지 스토리 #13</div>
+    <h1>로드 밸런싱과 스케일링,<br>트래픽 폭주에도 서비스는 어떻게 버티는가</h1>
+    <p class="subtitle">여러 계산대가 늘어선 마트에 비유해, 몰려드는 손님을 안내원이 어떻게 나눠 보내는지 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">Load Balancer</span><span class="vs">+</span><span class="be">Scaling</span></div>
+  </header>
+
+  <section class="intro">
+    <p>서비스 이용자가 갑자기 늘어나면 서버 한 대로는 감당할 수 없는 순간이 찾아옵니다. 이 문제를 풀어내는 두 축이 <strong class="fe-t">로드 밸런싱</strong>과 <strong class="be-t">스케일링</strong>입니다. 로드 밸런싱은 몰려드는 요청을 여러 서버에 고르게 나눠주는 기술이고, 스케일링은 애초에 처리 능력 자체를 키우는 전략입니다. 이 글에서는 계산대가 여러 개 늘어선 마트 하나를 빌려, 손님(요청)과 안내원(로드 밸런서), 계산대(서버 인스턴스)가 어떻게 맞물려 트래픽 폭주를 견뎌내는지 12컷으로 살펴봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 로드 밸런서의 등장과 확장의 두 축 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 손님들이 몰려드는 마트 입구와 안내원, 로드 밸런서의 정의, 혼자 버티기와 나눠서 버티기 비교, 수직 확장과 수평 확장 정의 카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>몰려드는 손님들, 서비스는 어떻게 버틸까</h3></div>
+      <p class="key-msg">갑자기 손님이 10배로 몰려도 서비스가 멈추지 않게 하는 것, 그것이 로드 밸런싱과 스케일링의 목표다.</p>
+      <p class="body">대형 마트 입구를 상상해 보세요. 문이 열리자 수십 명의 손님이 한꺼번에 밀려들고, 안쪽에는 계산대 다섯 개가 나란히 줄지어 있습니다. <span class="fe-t">안내원</span> 한 명이 입구 한가운데 서서 양팔을 벌려 손님들을 각 계산대로 나눠 보냅니다. 서비스를 이용하는 사용자가 늘어나면 서버 한 대로는 감당할 수 없는 순간이 반드시 옵니다. 이 문제를 해결하는 두 축이 <span class="fe-t">로드 밸런싱</span>과 <span class="be-t">스케일링</span>입니다. 로드 밸런싱은 몰려드는 요청을 여러 서버에 고르게 나눠주는 기술이고, 스케일링은 애초에 처리 능력 자체를 키우는 전략입니다. 이 둘이 맞물려야 트래픽이 폭주해도 서비스가 끊기지 않습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>안내원이 하는 일: 로드 밸런서의 정의</h3></div>
+      <p class="key-msg">로드 밸런서는 들어오는 요청을 여러 서버 인스턴스에 나눠주는 중간 장치다.</p>
+      <p class="body"><span class="fe-t">로드 밸런서</span>는 클라이언트의 요청과 실제 서버들 사이에 위치하는 중간 장치입니다. 사용자는 로드 밸런서의 주소로만 요청을 보내고, 로드 밸런서가 뒤에 있는 여러 <span class="be-t">서버</span> 중 하나를 골라 그 요청을 전달합니다. 마트로 치면 손님은 안내원에게만 말을 걸 뿐, 어느 계산대가 자신을 맡을지는 신경 쓰지 않습니다. 이렇게 하면 특정 서버 한 대에 부하가 몰리지 않고, 여러 대가 나눠서 일할 수 있습니다. <code>client → load balancer → server</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 혼자 버티기 vs 나눠서 버티기</h3></div>
+      <p class="key-msg">서버 한 대가 모든 요청을 받으면 과부하로 무너지지만, 여러 대로 나누면 각자 여유를 유지한다.</p>
+      <p class="body">로드 밸런서가 없다면 계산대 하나에 손님이 산더미처럼 쌓여 결국 과열 경고등이 켜집니다. 서버가 한 대뿐이면 모든 요청이 그 한 곳으로 몰려 처리 지연, 응답 실패, 심하면 서버 다운으로 이어지는 것과 같은 그림입니다. 반면 <span class="fe-t">안내원</span>이 있는 쪽에서는 같은 손님들이 세 개의 <span class="be-t">계산대</span>로 고르게 흩어지고, 줄은 짧고 램프는 여유롭게 켜져 있습니다. 같은 애플리케이션을 여러 서버 인스턴스에 복제해두고 로드 밸런서로 요청을 나누면, 각 서버는 전체 부하의 일부만 처리하면 됩니다. 결과적으로 응답 속도가 안정되고 서버 한 대가 죽어도 나머지가 서비스를 이어갈 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>권위 있는 정의: 수직 확장과 수평 확장</h3></div>
+      <p class="key-msg">확장에는 한 대를 더 강하게 만드는 수직 확장과, 여러 대로 늘리는 수평 확장이 있다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">SCALE-UP</div>
+            <div class="what">한 대를 더<br>강하게 만들기</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">SCALE-OUT</div>
+            <div class="what">여러 대로<br>늘리기</div>
+          </div>
+        </div>
+        <div class="tag">scaling strategies</div>
+      </div>
+      <p class="body">서버 한 대의 CPU와 메모리를 늘려 더 강력한 장비로 교체하는 것이 <span class="fe-t">수직 확장(scale-up)</span>이고, 동일한 서버를 여러 대 복제해 대수를 늘리는 것이 <span class="be-t">수평 확장(scale-out)</span>입니다. 수직 확장은 구조가 단순하지만 장비 성능에 물리적 한계가 있고, 수평 확장은 이론상 대수를 계속 늘릴 수 있지만 로드 밸런서 같은 분산 장치가 반드시 필요합니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 분산 알고리즘과 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 라운드로빈·최소연결·IP해시라는 세 가지 분산 알고리즘, 요청이 로드 밸런서를 거쳐 응답으로 돌아오는 순환, 세션 고정과 무상태 서버의 경계, nginx 설정과 헬스체크 코드 예시">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>분산 알고리즘 카탈로그: 안내원의 세 가지 방식</h3></div>
+      <p class="key-msg">안내원이 손님을 나누는 방법에는 순서대로, 가장 한가한 곳, 같은 손님은 같은 곳이라는 세 가지 대표 방식이 있다.</p>
+      <p class="body"><code>Round Robin</code>은 요청이 들어오는 순서대로 서버를 돌아가며 배정하는 가장 단순한 방식입니다. <code>Least Connections</code>는 현재 처리 중인 연결이 가장 적은, 즉 가장 한가한 서버를 골라 배정해 부하를 더 정교하게 맞춥니다. <code>IP Hash</code>는 같은 클라이언트의 요청을 항상 같은 서버로 보내 세션 정보를 유지해야 하는 상황에 유용합니다. 안내원이 순서대로 안내할지, 줄이 가장 짧은 곳으로 보낼지, 단골 손님은 늘 같은 계산대로 보낼지 정하는 규칙이라고 생각하면 됩니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 요청이 계산대까지 가는 여정</h3></div>
+      <p class="key-msg">요청이 도착하면 로드 밸런서가 살아있는 서버를 확인하고, 알고리즘에 따라 하나를 골라 응답을 돌려받는 순환이 반복된다.</p>
+      <div class="flow">
+        <span class="node n-user">① 요청 도착</span><span class="arrow">→</span>
+        <span class="node n-fe">② 헬스체크</span><span class="arrow">→</span>
+        <span class="node n-api">생존 서버 확인</span><span class="arrow">→</span>
+        <span class="node n-be">③ 알고리즘으로 서버 선택</span><span class="arrow">→</span>
+        <span class="node n-api">④ 응답 생성</span><span class="arrow">→</span>
+        <span class="node n-fe">사용자에게 반환</span>
+      </div>
+      <p class="body">요청이 로드 밸런서에 도착하면 먼저 헬스체크를 통해 어떤 서버가 정상 작동 중인지 확인합니다. 응답하지 않거나 오류를 내는 서버는 목록에서 제외되고, 살아있는 서버들 중에서 설정된 알고리즘(Round Robin, Least Connections 등)에 따라 하나가 선택됩니다. 선택된 서버가 요청을 처리해 응답을 만들면 로드 밸런서를 거쳐 사용자에게 돌아가고, 이 과정은 매 요청마다 반복됩니다. 문 닫힌 계산대는 애초에 안내 대상에서 빠지는 것과 같습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 손님을 한 계산대에 묶어둘까</h3></div>
+      <p class="key-msg">세션을 특정 서버에 고정하는 Sticky Session은 편리하지만, 상태 없는(stateless) 서버 설계가 확장에는 더 유리하다.</p>
+      <p class="body"><strong>Sticky Session</strong>은 같은 사용자의 요청을 항상 같은 서버로 보내 로그인 상태나 장바구니 같은 정보를 그 서버의 메모리에 유지할 수 있게 합니다. 구현은 간단하지만 특정 서버에 특정 사용자들이 몰리면 부하가 불균형해지고, 그 서버가 죽으면 세션 정보도 함께 사라집니다. 그래서 서버가 사용자 상태를 아예 기억하지 않고 세션 정보를 Redis 같은 외부 저장소에 두는 <strong>stateless</strong> 설계가 수평 확장에는 훨씬 유리합니다. 단골 손님을 늘 2번 계산대로만 보내면 편하지만, 장바구니를 손님이 직접 들고 다니게 하면 어느 계산대로 가도 상관없어집니다. <code>sticky session / stateless server</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 예시: 안내원의 매뉴얼</h3></div>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">nginx — upstream 설정</div>
+          <pre><span class="cm">// nginx upstream 설정</span>
+upstream backend {
+  server 10.0.0.1;
+  server 10.0.0.2;
+  server 10.0.0.3;
+}</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">서버 — 헬스체크 엔드포인트</div>
+          <pre><span class="cm">// 헬스체크 엔드포인트</span>
+app.get(<span class="st">'/health'</span>, (req, res) => {
+  res.status(<span class="kw">200</span>).send(<span class="st">'OK'</span>); <span class="cm">// 200 OK</span>
+});</pre>
+        </div>
+      </div>
+      <p class="body">nginx 같은 로드 밸런서는 upstream 블록에 백엔드 서버들의 주소를 나열해두는 방식으로 설정합니다. 여기에 각 서버가 <code>/health</code> 같은 엔드포인트에서 정상 응답(200 OK)을 주는지 주기적으로 확인하는 헬스체크를 연결하면, 응답하지 않는 서버는 자동으로 분배 대상에서 제외됩니다. 설정 파일 몇 줄과 간단한 헬스체크 코드만으로도 여러 서버를 하나의 서비스처럼 묶어낼 수 있습니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실수, 트레이드오프, 그리고 선택 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 로드 밸런서가 단일 장애점이 되는 실수와 오토스케일링 반응 지연, 수직 확장과 수평 확장의 비용·한계·무중단 배포 비교표, 트래픽 상황별 확장 전략 선택 가이드, 서버를 늘려도 풀리지 않는 병목을 의심하는 판별법과 핵심 요약">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 안내원이 쓰러지면 아무도 안내받지 못한다</h3></div>
+      <p class="key-msg">로드 밸런서 자체가 단일 장애점이 되지 않도록 이중화해야 하고, 오토스케일링 설정이 없으면 트래픽 급증에 늦게 반응한다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ SPOF: 안내원이 한 명뿐이라면</div>
+        <p>로드 밸런서는 모든 요청이 거쳐가는 관문이기 때문에, 그 자체가 한 대뿐이면 그것이 다운되는 순간 뒤에 서버가 아무리 많아도 서비스 전체가 멈춥니다.</p>
+        <div class="ok-label">✓ 이중화 + 오토스케일링</div>
+        <p>로드 밸런서도 이중화하거나 클라우드의 관리형 로드 밸런서를 사용해 단일 장애점을 없애야 합니다. 트래픽 급증에 맞춰 서버 대수를 자동으로 늘리는 오토스케일링 설정이 없거나 임계값이 지나치게 보수적이면, 새 서버가 준비되기 전에 이미 사용자들이 지연과 오류를 겪게 됩니다.</p>
+      </div>
+      <p class="body">유일한 안내원이 쓰러지면 뒤에 멀쩡한 계산대가 다섯 개 있어도 아무도 안내받지 못해 텅 비어 있는 것과 같습니다. 손님이 갑자기 몰렸는데 계산대는 그대로이고 새 계산대가 저 멀리서 천천히 조립되고 있다면, 그 사이 대기줄은 문 밖까지 늘어섭니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 한 대를 키울까, 여러 대를 늘릴까</h3></div>
+      <p class="key-msg">수직 확장과 수평 확장은 비용, 한계, 무중단 배포 용이성에서 뚜렷이 다른 트레이드오프를 가진다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>장비 한 대를 키우는 한계 vs 대수를 늘리는 유연함</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="fe-th">수직 확장 (Scale-up)</th>
+              <th class="be-th">수평 확장 (Scale-out)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">비용</td><td>고성능 장비일수록 기하급수적으로 증가</td><td>저렴한 서버를 여러 대로 분산</td></tr>
+            <tr><td class="axis">한계</td><td>물리적 한계에 부딪힘</td><td>이론상 한계가 거의 없음</td></tr>
+            <tr><td class="axis">무중단 배포</td><td>교체 중 서비스 중단이 발생하기 쉬움</td><td>한 대씩 순서대로 교체 가능</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">수직 확장은 초기에는 간단하지만 고성능 장비일수록 비용이 기하급수적으로 오르고, 결국 물리적으로 더 키울 수 없는 한계에 부딪힙니다. 수평 확장은 저렴한 서버를 여러 대 늘리는 방식이라 이론상 한계가 거의 없고, 서버 한 대씩 순서대로 교체하며 무중단 배포를 하기도 훨씬 쉽습니다. 다만 수평 확장은 로드 밸런서, 상태 관리, 데이터 동기화 같은 추가 설계가 필요하다는 점이 대가로 따라옵니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>언제 무엇을 쓰나: 상황별 선택 가이드</h3></div>
+      <p class="key-msg">트래픽이 예측 가능하고 작으면 수직 확장으로 단순하게, 변동이 크고 무중단이 중요하면 수평 확장과 오토스케일링을 쓴다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>📊 작고 예측 가능한 트래픽 → <span class="fe-t">수직 확장</span></h4>
+          <ul>
+            <li>사용자 수가 안정적인 서비스</li>
+            <li>트래픽 변동이 크지 않음</li>
+            <li>서버 한 대 사양만 올려도 충분</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>📊 변동 크고 무중단이 중요 → <span class="be-t">수평 확장 + 오토스케일링</span></h4>
+          <ul>
+            <li>이벤트·시간대별로 트래픽 출렁임</li>
+            <li>서비스 중단을 허용할 수 없음</li>
+            <li>로드밸런서 + 서버 대수 자동 조절</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">사용자 수가 안정적이고 트래픽 변동이 크지 않은 서비스라면 서버 한 대의 사양을 올리는 수직 확장만으로도 충분히 단순하고 관리하기 쉽습니다. 반면 이벤트나 시간대에 따라 트래픽이 크게 출렁이고 서비스 중단을 허용할 수 없는 서비스라면, 로드 밸런서 뒤에 여러 서버를 두고 트래픽에 맞춰 서버 대수를 자동으로 늘리고 줄이는 오토스케일링을 결합한 수평 확장이 적합합니다. 실무에서는 처음엔 수직 확장으로 시작했다가 트래픽이 커지면서 수평 확장으로 전환하는 경우가 흔합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>실전 판별과 핵심 요약: 구조를 의심할 때</h3></div>
+      <p class="key-msg">서버 한 대를 늘려도 문제가 해결되지 않는다면, 서버 성능이 아니라 구조 자체를 의심해야 한다.</p>
+      <p class="body">서버 사양을 아무리 올려도 응답 지연이 풀리지 않는다면, 병목이 서버의 연산 능력이 아니라 데이터베이스, 네트워크, 혹은 애플리케이션 구조 자체에 있을 가능성이 큽니다. 이럴 때는 무작정 서버를 늘리기 전에 어디서 시간이 지연되는지부터 진단해야 합니다. 결국 로드 밸런싱과 스케일링은 서버를 늘리는 기술이지만, 그 효과를 제대로 보려면 헬스체크, 무상태 설계, 이중화, 오토스케일링이라는 기본기가 함께 갖춰져 있어야 합니다.</p>
+      <div class="chips">
+        <span class="chip">로드 밸런서 = 요청 분배 중간 장치</span>
+        <span class="chip">수직 확장 vs 수평 확장</span>
+        <span class="chip">Round Robin / Least Connections / IP Hash</span>
+        <span class="chip">헬스체크로 생존 서버만 선택</span>
+        <span class="chip">Stateless 설계가 확장에 유리</span>
+        <span class="chip">로드 밸런서 이중화 + 오토스케일링</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">하나의 마트, 두 개의 축</div>
+    <p>로드 밸런싱은 몰려드는 요청을 여러 서버에 고르게 나누고, 스케일링은 그 서버들의 처리 능력 자체를 키웁니다.<br>손님을 나눠 보내는 안내원과 나란히 늘어선 계산대처럼, 두 축이 함께 맞물려야 트래픽 폭주에도 서비스는 멈추지 않습니다.</p>
+    <span class="sig">load balanced, scale ready</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

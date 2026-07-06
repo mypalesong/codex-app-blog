@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>터미널과 CLI — 클릭 대신 명령어로 말하기 | 12컷 이미지 스토리</title>
+<meta name="description" content="손이 아니라 말로 움직이는 주방에 비유해, 터미널과 CLI가 무엇이고 왜 개발자들이 마우스 대신 키보드로 컴퓨터와 대화하는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #f0b23e;
+    --be: #00ff9c;
+    --fe-deep: #b9800f;
+    --be-deep: #0e9c5c;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(0,255,156,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,156,0.045) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(14,156,92,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #855c0c, #f0b23e); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #075c3a, #00d485); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(240,178,62,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(0,255,156,0.1); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(185,128,15,0.2); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(0,255,156,0.12); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 실전 체크리스트 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 개발 도구 기초 · 12컷 이미지 스토리 #38</div>
+    <h1>터미널과 CLI,<br>클릭 대신 명령어로 말하기</h1>
+    <p class="subtitle">손이 아니라 말로 움직이는 주방에 비유해, 검은 창 안에서 오가는 명령어의 세계를 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">GUI</span><span class="vs">vs</span><span class="be">CLI</span></div>
+  </header>
+
+  <section class="intro">
+    <p>우리는 평소 화면 속 버튼과 아이콘을 손가락으로 눌러 컴퓨터에게 무언가를 시킵니다. 그런데 개발자들이 즐겨 여는 화면 한구석에는 아무 그림도 없이 깜빡이는 커서만 있는 낯선 검은 창이 있습니다. 이 창의 이름은 <strong class="be-t">터미널</strong>이고, 이 창 안에서 문장으로 명령을 주고받는 방식을 <strong class="be-t">CLI</strong>(Command Line Interface)라고 부릅니다. 이 글은 아이콘을 누르는 <strong class="fe-t">GUI</strong>의 손 대신, 정확한 구두 주문으로 움직이는 주방 하나에 비유해 그 정체를 하나씩 풀어봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 두 세계의 발견 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 클릭하는 손과 낯선 검은 터미널 창의 대비, 터미널과 CLI의 정의, GUI와 CLI 나란히 비교, 한 문장으로 정리한 정의 카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>이 까만 창은 대체 무엇일까</h3></div>
+      <p class="key-msg">화면 속 아이콘을 마우스로 클릭하는 대신, 정확한 문장 한 줄을 입력하면 컴퓨터가 그대로 실행하는 낯선 검은 창이 있다.</p>
+      <p class="body">우리는 평소 화면 속 버튼과 아이콘을 손가락으로 눌러 컴퓨터에게 무언가를 시킵니다. 그런데 개발자들이 즐겨 쓰는 화면 한구석에는 아무 그림도 없이 깜빡이는 커서만 있는 낯선 검은 창이 있습니다. 이 창의 이름은 <span class="be-t">터미널</span>이고, 이 창 안에서 문장으로 명령을 주고받는 방식을 <span class="be-t">CLI</span>(Command Line Interface)라고 부릅니다. 이 시리즈는 손이 아니라 말로 움직이는 주방에 비유해 그 정체를 하나씩 살펴봅니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: 창 하나와 그 안의 대화법</h3></div>
+      <p class="key-msg">터미널은 텍스트로 명령을 입력하고 결과를 텍스트로 돌려받는 프로그램(그릇)이고, CLI는 그 안에서 명령어 문장으로 컴퓨터와 대화하는 방식(화법)이다.</p>
+      <p class="body">터미널(Terminal)은 문자를 입력하면 그 문자를 컴퓨터에 전달하고, 처리된 결과를 다시 문자로 화면에 찍어주는 프로그램입니다. 이 창 자체는 그저 대화가 오가는 그릇일 뿐입니다. CLI(Command Line Interface)는 그 그릇 안에서 우리가 실제로 사용하는 대화의 방식, 즉 정해진 명령어 문장으로 컴퓨터에게 지시를 내리고 응답을 받는 화법을 가리킵니다. 마치 주방이라는 공간(터미널)과 그 안에서 주고받는 정확한 주문 화법(CLI)이 서로 다른 개념인 것과 같습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 버튼을 누르는 손, 문장을 말하는 입</h3></div>
+      <p class="key-msg">GUI는 마우스로 아이콘을 클릭해 직관적으로 조작하지만 반복 작업에는 느리고, CLI는 타이핑이 낯설지만 반복과 자동화에 강하다.</p>
+      <p class="body">GUI(Graphical User Interface)는 아이콘과 버튼을 눈으로 보고 마우스로 클릭하는 방식이라 처음 배우기 쉽고 직관적입니다. 하지만 같은 작업을 여러 번 반복해야 한다면 매번 같은 클릭을 되풀이해야 하니 손이 아플 만큼 느려집니다. CLI(Command Line Interface)는 명령어 문장을 정확히 외워서 타이핑해야 하니 처음에는 낯설고 어렵게 느껴집니다. 그러나 한 번 정확한 문장을 완성해두면 그 문장을 그대로 복사해 100번이든 1000번이든 반복하거나, AI에게 그대로 전달해 자동으로 실행시킬 수 있다는 점에서 반복 작업과 자동화에 훨씬 강합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>한 문장으로 정리하면</h3></div>
+      <p class="key-msg">터미널은 손이 아니라 말로 움직이는 주방이고, CLI는 그 주방에서 정확한 문장으로 주문하는 화법이다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">GUI</div>
+            <div class="what">손으로 눌러<br>움직이는 방식</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">CLI</div>
+            <div class="what">말(문장)로<br>움직이는 방식</div>
+          </div>
+        </div>
+        <div class="tag">definition</div>
+      </div>
+      <p class="body">터미널은 손이 아니라 말로 움직이는 주방입니다. 이 한 문장만 기억해도 왜 개발자들이 마우스 대신 키보드로 문장을 쳐서 컴퓨터를 다루는지 이해할 수 있습니다. 화면을 눌러 움직이면 GUI, 문장으로 정확히 지시해서 움직이면 CLI입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 도구와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 대표 명령어와 터미널 앱 카탈로그, 명령어가 입력·해석·실행·출력되는 흐름, 터미널과 셸의 차이, 실제 명령어로 보는 코드 예시">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>주방 도구 카탈로그: 대표 명령어와 터미널 앱들</h3></div>
+      <p class="key-msg">CLI에는 자주 쓰는 대표 명령어들과 그 명령어를 입력하는 다양한 터미널 앱, 그리고 입력을 도와주는 편의 기능들이 있다.</p>
+      <p class="body">CLI에서는 <code>cd</code>로 폴더를 이동하고, <code>ls</code>(맥/리눅스)나 <code>dir</code>(윈도우)로 폴더 안 내용을 보고, <code>mkdir</code>로 새 폴더를 만듭니다. <code>npm</code>과 <code>pip</code>는 각각 자바스크립트와 파이썬 패키지를 설치하는 명령어이고, <code>git</code>은 코드의 변경 이력을 관리하는 명령어입니다. 이 명령어들은 macOS의 Terminal, 윈도우의 PowerShell, 또는 Git Bash 같은 여러 터미널 앱 안에서 똑같이 사용할 수 있습니다. 또한 Tab 키를 누르면 폴더나 파일 이름을 끝까지 자동으로 채워주고, 위아래 화살표 키를 누르면 이전에 입력했던 명령어를 다시 불러올 수 있어 매번 처음부터 다시 칠 필요가 없습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 주문이 접수되고 실행되는 흐름</h3></div>
+      <p class="key-msg">명령어를 입력하고 엔터를 치면 셸이 그 문장을 해석해 운영체제에 전달하고, 처리 결과가 다시 텍스트로 화면에 출력되는 흐름이 CLI의 기본 동작 방식이다.</p>
+      <div class="flow">
+        <span class="node n-user">명령어 입력</span><span class="arrow">→</span>
+        <span class="node n-be">셸(shell) 해석</span><span class="arrow">→</span>
+        <span class="node n-api">OS · 파일시스템 실행</span><span class="arrow">→</span>
+        <span class="node n-be">결과 텍스트 출력</span>
+      </div>
+      <p class="body">명령어를 입력하고 엔터를 누르면, 셸(shell)이라는 프로그램이 그 문장을 해석해서 무엇을 하라는 뜻인지 파악합니다. 셸은 이 해석된 지시를 운영체제에 전달해 실제로 폴더를 만들거나 파일을 옮기거나 프로그램을 설치하는 작업을 수행시킵니다. 작업이 끝나면 그 결과, 즉 성공 메시지나 파일 목록 같은 텍스트가 다시 터미널 화면에 출력됩니다. 주방장이 손님의 구두 주문을 정확히 알아듣고 재료 창고에서 필요한 것을 꺼내온 뒤 접시에 담아 내주는 것과 같은 흐름입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 창(터미널)과 그 안의 말(셸)</h3></div>
+      <p class="key-msg">터미널은 명령을 입력하는 창(그릇)일 뿐이고, 그 안에서 실제로 문장을 해석하는 프로그램은 셸(bash, zsh, PowerShell 등)이라는 점이 자주 헷갈린다.</p>
+      <p class="body">많은 초보자가 &lsquo;터미널&rsquo;과 &lsquo;셸(shell)&rsquo;을 같은 말로 여기지만 엄밀히는 다릅니다. 터미널(또는 터미널 앱)은 문자를 입력하고 결과를 보여주는 화면, 즉 그릇에 가깝습니다. 셸은 그 안에서 우리가 입력한 문장을 실제로 해석해서 실행하는 프로그램으로, <code>bash</code>, <code>zsh</code>, <code>PowerShell</code>처럼 여러 종류가 있습니다. 그래서 같은 터미널 앱 안에서도 어떤 셸을 쓰느냐에 따라 명령어 문법이 살짝 달라질 수 있고, 반대로 터미널 앱을 바꿔도 같은 셸을 쓰면 명령어는 그대로 통합니다. <code>the window is not the language</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 명령어: 실제 주문 문장들</h3></div>
+      <p class="key-msg">폴더 이동, 목록 확인, 새 폴더 생성, 패키지 설치 같은 작업은 각각 정해진 명령어 문장 하나로 실행할 수 있다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">GUI라면 — 여러 번의 클릭</div>
+          <pre><span class="cm">// 새 폴더 만들고 패키지 설치하기 (마우스로)</span>
+1) 탐색기를 열고 project 폴더로 이동
+2) 빈 곳 우클릭 → 새 폴더 → 이름 입력
+3) 압축파일 찾아 압축 풀기 클릭 (수십 회 반복)
+4) 완료될 때까지 창을 계속 지켜보기</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">CLI라면 — 한 줄씩 정확한 주문</div>
+          <pre><span class="cm">$</span> cd Desktop/project
+<span class="cm">$</span> ls
+<span class="cm">$</span> mkdir new-feature
+<span class="cm">$</span> npm install</pre>
+        </div>
+      </div>
+      <p class="body"><code>cd Desktop/project</code>는 지금 있는 위치에서 Desktop 안의 project 폴더로 이동하라는 문장입니다. <code>ls</code>(또는 윈도우의 <code>dir</code>)는 지금 폴더 안에 무엇이 있는지 보여달라는 문장이고, <code>mkdir new-feature</code>는 new-feature라는 이름의 새 폴더를 만들어달라는 문장입니다. <code>npm install</code>은 프로젝트에 필요한 패키지들을 전부 설치해달라는 문장으로, 실제로는 이렇게 몇 줄의 정확한 명령어만으로 마우스로 여러 번 클릭해야 할 작업을 한 번에 끝낼 수 있습니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 위치를 모르고 외친 명령어 실수, GUI와 CLI 트레이드오프 비교표, 에러 대응과 위치 확인 실전 가이드, 커서만 깜빡이면 터미널이라는 판별법과 핵심 요약">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 자기가 어느 자리에 있는지 모르고 외치는 주문</h3></div>
+      <p class="key-msg">지금 자신이 어느 폴더(경로)에 있는지 모른 채 명령어를 실행하면 엉뚱한 곳에 파일이 생기거나 에러가 나고, 철자 하나만 틀려도 &ldquo;명령을 찾을 수 없다&rdquo;는 에러를 만난다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ 지금 위치를 모르고 외친 주문</div>
+        <p>터미널은 항상 &lsquo;지금 내가 어느 폴더 안에 있는지&rsquo;를 기준으로 명령을 실행합니다. 자신의 위치를 확인하지 않고 명령어를 실행하면 원하는 폴더가 아닌 엉뚱한 곳에 파일이 생기거나, 애초에 그 폴더 안에 없는 파일을 찾으라고 시켜 <code>No such file or directory</code> 에러가 나기도 합니다. 또한 CLI는 사람과 달리 눈치껏 알아듣지 못하기 때문에 대소문자 하나, 띄어쓰기 하나만 달라도 전혀 다른 명령으로 인식하거나 아예 <code>command not found</code>라는 에러를 돌려줍니다.</p>
+        <div class="ok-label">✓ 실행 전에 위치부터 확인한다</div>
+        <p>정확한 문장으로 말해야 정확히 실행되는 것이 CLI의 특징이자 낯섦의 원인입니다. 명령어를 외치기 전에 지금 서 있는 자리부터 확인하는 습관이 이런 실수를 막는 가장 확실한 방법입니다.</p>
+      </div>
+      <p class="body">눈을 가린 채 자신이 어느 폴더에 서 있는지도 모르고 명령어부터 외치는 모습을 떠올려 보세요. 발밑은 여러 폴더가 뒤섞인 미로 같아서, 정확한 위치를 모르면 아무리 정확한 문장이라도 엉뚱한 곳에서 실행되고 맙니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 빠른 반복과 배움의 문턱</h3></div>
+      <p class="key-msg">CLI는 반복 작업을 한 줄로 빠르게 처리하고 AI에게 그대로 전달하기도 쉽지만, 처음 배울 때는 어떤 명령어가 무엇을 하는지 외워야 하는 진입장벽이 있다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>same task, different cost curve</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="fe-th">GUI</th>
+              <th class="be-th">CLI</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">반복 작업 속도</td><td>같은 작업이면 매번 다시 클릭</td><td>한 줄 명령어를 그대로 반복 실행</td></tr>
+            <tr><td class="axis">AI에게 전달하기</td><td>화면을 캡처해 설명해야 함</td><td>명령어 문장을 그대로 복사해 전달</td></tr>
+            <tr><td class="axis">배우는 난이도</td><td>보고 누르면 되어 쉬움</td><td>명령어를 외워야 해 진입장벽 있음</td></tr>
+            <tr><td class="axis">기억해야 할 것</td><td>거의 없음</td><td>명령어와 옵션의 문법</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">CLI는 한 번 정확한 명령어를 익히면 같은 작업을 몇 번이고 한 줄로 빠르게 반복할 수 있고, 그 명령어 문장을 그대로 복사해 AI에게 보여주면 AI도 상황을 정확히 이해하고 도와주기 쉽습니다. 반면 GUI는 화면 상태를 말로 설명하거나 스크린샷을 찍어 전달해야 하니 조금 번거롭습니다. 다만 CLI는 처음 배울 때 어떤 명령어가 무엇을 하는지 하나하나 외워야 하는 진입장벽이 있어서, 익숙해지기 전까지는 GUI보다 느리고 불편하게 느껴질 수 있습니다. 이 문턱만 넘으면 이후의 작업 속도는 CLI 쪽이 훨씬 빨라집니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>실전 활용: 막히면 이렇게 물어보고 확인한다</h3></div>
+      <p class="key-msg">에러가 나면 명령어 전체와 에러 메시지를 그대로 복사해 AI에게 물어보고, 명령을 실행하기 전에는 위치부터 먼저 확인하는 습관이 중요하다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🔍 &ldquo;에러가 났을 때&rdquo; → <span class="fe-t">AI에게 그대로 물어보기</span></h4>
+          <ul>
+            <li>에러 메시지 전체 복사</li>
+            <li>실행한 명령어도 함께 복사</li>
+            <li>&ldquo;이 에러가 왜 났는지 알려줘&rdquo;라고 질문</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🔍 &ldquo;명령을 치기 전에&rdquo; → <span class="be-t">위치부터 확인</span></h4>
+          <ul>
+            <li><code>pwd</code> 또는 <code>cd</code> 단독 입력으로 확인</li>
+            <li>지금 폴더가 맞는지 점검</li>
+            <li>확인 후 명령어 실행 → 결과 확인</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">터미널에서 에러가 나면 당황하지 말고 명령어 전체와 에러 메시지 전체를 그대로 복사해서 AI에게 보여주고 무슨 뜻인지, 어떻게 고치면 되는지 물어보는 것이 가장 빠른 해결 방법입니다. 명령을 실행하기 전에는 <code>pwd</code>(print working directory) 명령어나, 윈도우 PowerShell에서는 <code>cd</code>만 단독으로 입력해서 지금 내가 어느 폴더에 있는지 먼저 확인하는 습관을 들이면 엉뚱한 곳에 파일을 만드는 실수를 크게 줄일 수 있습니다. 위치를 확인하고, 명령어를 실행하고, 결과를 확인하고, 막히면 에러를 복사해 질문하는 이 네 단계만 반복해도 CLI 사용은 훨씬 편해집니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>실전 판별 + 핵심 요약: 커서만 깜빡이면 그것이다</h3></div>
+      <p class="key-msg">화면에 누를 아이콘이 없고 오직 깜빡이는 커서와 텍스트만 있다면 그것이 터미널이고, 그 안에서 오가는 정확한 문장이 CLI다.</p>
+      <p class="body">가장 간단한 판별법은 이것입니다. 화면에 누를 버튼이나 아이콘이 하나도 없고 오직 깜빡이는 커서와 글자만 있다면, 그것이 바로 <span class="be-t">터미널</span>입니다. 그리고 그 안에서 우리가 정확한 규칙에 맞춰 입력하고 주고받는 문장이 <span class="be-t">CLI</span>입니다. 손으로 아이콘을 눌러 움직이는 <span class="fe-t">GUI</span>와 달리, CLI는 정확한 문장 하나로 컴퓨터에게 원하는 일을 그대로 시킬 수 있고, 그 문장을 그대로 AI에게 전달하면 훨씬 더 정확하고 빠른 도움을 받을 수 있습니다. 처음엔 낯설지만, 이 검은 창에 말을 걸 줄 알게 되는 순간부터 컴퓨터와의 대화는 완전히 새로운 차원으로 넓어집니다.</p>
+      <div class="chips">
+        <span class="chip">터미널 = 창, CLI = 대화 방식</span>
+        <span class="chip">GUI는 클릭, CLI는 문장</span>
+        <span class="chip">cd·ls·mkdir·npm·pip·git</span>
+        <span class="chip">Tab 자동완성, 화살표 히스토리</span>
+        <span class="chip">위치 확인이 실수 예방의 시작</span>
+        <span class="chip">판별법: 커서만 깜빡이면 터미널</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">손이 아니라 말로 움직이는 주방</div>
+    <p>GUI는 화면 속 아이콘을 눌러 움직이는 방식이고, CLI는 정확한 문장으로 컴퓨터에게 말을 걸어 움직이는 방식입니다.<br>버튼을 누르는 손과 정확한 주문을 말하는 입처럼, 두 화법은 서로 다르지만 결국 같은 컴퓨터를 움직입니다.</p>
+    <span class="sig">click vs command, understood</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

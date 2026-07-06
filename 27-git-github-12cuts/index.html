@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git과 GitHub — 코드의 시간여행과 백업 | 12컷 이미지 스토리</title>
+<meta name="description" content="게임 속 세이브 포인트와 인터넷 저편의 클라우드 창고에 비유해, Git과 GitHub가 각각 무엇을 책임지는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #ff7d55;
+    --be: #d3d7dd;
+    --fe-deep: #F05033;
+    --be-deep: #2a2d33;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(240,80,51,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(240,80,51,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(240,80,51,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #8a2a12, #F05033); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #101114, #34373f); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(240,80,51,0.12); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(211,215,221,0.08); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .warn-label:not(:first-child) { margin-top: 16px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(240,80,51,0.16); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(211,215,221,0.12); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 디버깅 가이드 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 버전 관리 · 12컷 이미지 스토리 #27</div>
+    <h1>Git과 GitHub,<br>코드의 시간여행과 백업은 어떻게 이루어지는가</h1>
+    <p class="subtitle">게임 속 &lsquo;세이브 포인트&rsquo;와 인터넷 저편의 &lsquo;클라우드 창고&rsquo;에 비유해, 코드를 저장하고 되돌리는 방법을 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">Git</span><span class="vs">vs</span><span class="be">GitHub</span></div>
+  </header>
+
+  <section class="intro">
+    <p>바이브 코딩을 하다 보면 잘 되던 코드가 갑자기 안 돌아가거나, AI가 고쳐준 코드가 오히려 더 꼬여버리는 순간이 꼭 옵니다. 그럴 때 &lsquo;몇 분 전 상태로 돌아가고 싶다&rsquo;는 생각, 다들 한 번쯤 해보셨을 겁니다. <strong class="fe-t">Git</strong>은 바로 그 순간을 위해 작업 중간중간 스냅샷을 저장해두는 도구이고, <strong class="be-t">GitHub</strong>는 그 스냅샷들을 인터넷 어딘가에 안전하게 보관하고 필요하면 다른 사람과 나눠 쓸 수 있게 해주는 서비스입니다. 이 글에서는 이 두 가지를 게임의 <strong>세이브 포인트</strong>와 <strong>클라우드 창고</strong>에 비유해 하나씩 풀어봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 세이브 포인트의 정의와 비교 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 코드가 엉망이 됐을 때 되돌아갈 세이브 포인트를 떠올리는 표지, 커밋은 스냅샷이라는 정의, 로컬 Git과 원격 GitHub의 비교, Git과 GitHub를 한 문장으로 정리한 정의 카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>그때로 돌아갈 수 있다면?</h3></div>
+      <p class="key-msg">게임을 하다 실수로 죽으면 마지막 세이브 포인트로 돌아가듯, 코드가 엉망이 됐을 때도 이전 상태로 돌아갈 수 있다면 어떨까.</p>
+      <p class="body">바이브 코딩을 하다 보면 잘 되던 코드가 갑자기 안 돌아가거나, AI가 고쳐준 코드가 오히려 더 꼬여버리는 순간이 꼭 옵니다. 그럴 때 &lsquo;몇 분 전 상태로 돌아가고 싶다&rsquo;는 생각, 다들 한 번쯤 해보셨을 겁니다. <span class="fe-t">Git</span>은 바로 그 순간을 위해 작업 중간중간 스냅샷을 저장해두는 도구이고, <span class="be-t">GitHub</span>는 그 스냅샷들을 인터넷 어딘가에 안전하게 보관하고 필요하면 다른 사람과 나눠 쓸 수 있게 해주는 서비스입니다. 이 시리즈는 이 두 가지를 게임의 세이브 포인트와 클라우드 창고에 비유해 하나씩 풀어봅니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: 세이브 포인트란 무엇인가</h3></div>
+      <p class="key-msg">Git은 파일이 바뀔 때마다 그 순간의 상태를 통째로 기록해두는 버전 관리 시스템이며, 이렇게 기록된 하나의 스냅샷을 &ldquo;커밋(commit)&rdquo;이라고 부른다.</p>
+      <p class="body"><span class="fe-t">Git</span>은 내 컴퓨터 안에서 코드 파일이 바뀌는 과정을 하나하나 기록해주는 프로그램입니다. &lsquo;저장&rsquo;을 누를 때마다 지금 상태를 통째로 찍어두는 것이 아니라, 내가 &lsquo;지금까지 한 작업을 스냅샷으로 남기고 싶다&rsquo;고 명령할 때마다 그 순간을 기록하는데, 이 기록 하나하나를 <code>commit</code>이라고 부릅니다. 게임에서 세이브 포인트를 밟아야 그 순간이 저장되듯, Git도 내가 직접 &lsquo;커밋&rsquo;을 해야 그 시점이 남습니다. 그래서 커밋을 자주 해둘수록 나중에 되돌아갈 수 있는 지점도 촘촘해집니다. <code>version control system</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 내 컴퓨터 안의 세이브 시스템 vs 인터넷 저편의 창고</h3></div>
+      <p class="key-msg">Git은 내 컴퓨터 안에서 버전을 기록하는 로컬 도구이고, GitHub는 그 기록을 인터넷에 올려 백업하고 공유하는 원격 서비스다.</p>
+      <p class="body"><span class="fe-t">Git</span>은 인터넷 연결 없이도 내 컴퓨터 안에서 혼자 돌아가는 프로그램입니다. 커밋을 만들고 이전 상태로 되돌리는 모든 작업이 내 하드디스크 안에서 이루어집니다. <span class="be-t">GitHub</span>는 그 Git 기록을 인터넷 어딘가의 서버에 올려두는 서비스로, 컴퓨터가 고장 나거나 없어져도 코드가 사라지지 않도록 백업해주고, 다른 사람도 그 코드를 내려받거나 함께 수정할 수 있게 해줍니다. 즉 Git이 &lsquo;세이브하는 방법&rsquo;이라면, GitHub는 그 세이브 파일을 보관해두는 &lsquo;클라우드 창고&rsquo;입니다. <code>local</code> / <code>remote</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>한 문장으로 정리하면</h3></div>
+      <p class="key-msg">이 한 문장만 기억해도 &lsquo;내 컴퓨터에서 저장하는 것&rsquo;과 &lsquo;인터넷에 올려 공유하는 것&rsquo;을 헷갈리지 않을 수 있다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">GIT</div>
+            <div class="what">코드의 변화를 기록하고<br>되돌릴 수 있게 해주는 도구</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">GITHUB</div>
+            <div class="what">그 기록을 인터넷에 보관하며<br>다른 사람과 나누는 서비스</div>
+          </div>
+        </div>
+        <div class="tag">definition</div>
+      </div>
+      <p class="body">Git은 코드의 변화를 기록하고, 언제든 원하는 시점으로 되돌릴 수 있게 해주는 도구입니다. GitHub는 그 기록을 인터넷 어딘가에 보관해 백업해주고, 다른 사람과 코드를 나누거나 함께 작업할 수 있게 해주는 서비스입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 도구 카탈로그와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 세이브 명령어와 창고 이용법 카탈로그, 수정부터 push까지 이어지는 동작 원리, Git과 GitHub가 다른 것임을 보여주는 경계 설명, 터미널 명령어로 보는 실제 흐름">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>도구 카탈로그: 세이브 명령어와 창고 이용법</h3></div>
+      <p class="key-msg">Git과 GitHub를 다루는 데는 몇 가지 핵심 개념과 명령이 있으며, 이들은 각각 &ldquo;기록을 시작하고 저장하는 것&rdquo;과 &ldquo;그 기록을 주고받고 검토하는 것&rdquo;을 담당한다.</p>
+      <p class="body"><code>git init</code>은 폴더에 세이브 시스템을 새로 설치하는 명령이고, <code>git add</code>는 저장할 파일들을 모아 담는 것이고, <code>git commit</code>은 실제로 그 순간을 스냅샷으로 남기는 것입니다. <strong class="fe-t">브랜치(branch)</strong>는 원래 기록에서 갈라져 나온 평행 세계 같은 저장 줄기로, 원본을 건드리지 않고 실험해볼 수 있게 해줍니다. <code>push</code>는 내 컴퓨터의 커밋들을 GitHub 창고에 올려 보내는 것이고, <code>pull</code>은 반대로 창고에 있는 최신 기록을 내 컴퓨터로 받아오는 것입니다. <strong class="be-t">풀 리퀘스트(pull request)</strong>는 &lsquo;이 변경사항을 원본에 반영해도 될지 검토해 달라&rsquo;는 요청서로, 여러 사람이 함께 작업할 때 꼭 필요한 절차입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 코드가 저장되고 창고로 올라가는 흐름</h3></div>
+      <p class="key-msg">파일을 수정하고, 저장할 것을 고르고(add), 스냅샷을 남기고(commit), 그 기록을 창고로 올려 보내는(push) 흐름이 Git과 GitHub를 함께 쓰는 기본 순서다.</p>
+      <div class="flow">
+        <span class="node n-user">작업 중 (working directory)</span><span class="arrow">→</span>
+        <span class="node n-api">git add (스테이징)</span><span class="arrow">→</span>
+        <span class="node n-fe">git commit (스냅샷)</span><span class="arrow">→</span>
+        <span class="node n-be">git push (GitHub 업로드)</span>
+      </div>
+      <p class="body">코드를 고치고 나면 먼저 <code>git add</code>로 이번에 저장할 파일들을 고릅니다. 그다음 <code>git commit</code>으로 그 순간의 상태를 하나의 스냅샷, 즉 세이브 포인트로 남깁니다. 여기까지는 전부 내 컴퓨터 안에서 끝나는 일입니다. 이제 <code>git push</code>를 실행하면 내 컴퓨터에 쌓인 커밋들이 GitHub라는 창고로 올라가 백업되고, 팀원이 있다면 그들도 <code>git pull</code>로 이 최신 기록을 자기 컴퓨터로 받아올 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: Git과 GitHub는 같은 것이 아니다</h3></div>
+      <p class="key-msg">Git은 특정 회사의 제품이 아니라 누구나 쓸 수 있는 버전 관리 기술 자체이고, GitHub는 그 Git을 이용해 만든 여러 서비스 중 하나일 뿐이다.</p>
+      <p class="body">많은 초보자들이 Git과 GitHub를 같은 것으로 헷갈립니다. <span class="fe-t">Git</span>은 리누스 토르발스가 만든 오픈소스 버전 관리 기술 자체로, 누구나 자기 컴퓨터에 설치해 무료로 쓸 수 있습니다. <span class="be-t">GitHub</span>는 이 Git 기술을 바탕으로 만든 하나의 인터넷 서비스일 뿐이고, GitLab이나 Bitbucket 같은 비슷한 서비스도 존재합니다. 다만 GitHub가 가장 널리 쓰이고 커뮤니티가 크기 때문에 사실상 기본값처럼 여겨지는 것뿐이며, Git 없이는 애초에 GitHub도 쓸 수 없다는 점을 기억해두면 좋습니다. <code>Git &ne; GitHub</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>명령어로 보는 실제 흐름</h3></div>
+      <p class="key-msg">바이브 코딩을 할 때 가장 먼저 익혀야 할 것은 저장소를 만들고, 변경사항을 확인하고, 커밋하고, GitHub로 올려 보내는 몇 줄의 기본 명령어다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">Git — 로컬에서 기록하기</div>
+          <pre><span class="cm"># 새 저장소 시작</span>
+git init
+<span class="cm"># 변경된 파일 전부 선택</span>
+git add .
+<span class="cm"># 스냅샷으로 남기기</span>
+git commit -m <span class="st">"로그인 기능 추가"</span></pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">GitHub — 창고로 올리기</div>
+          <pre><span class="cm">// 원격 저장소 연결</span>
+git remote add origin &lt;URL&gt;
+<span class="cm">// 원격 저장소로 전송</span>
+git push -u origin main</pre>
+        </div>
+      </div>
+      <p class="body">실제로 손을 움직여보면 이렇습니다. 새 프로젝트 폴더에서 <code>git init</code>을 한 번 실행해 세이브 시스템을 설치하고, 코드를 수정한 뒤 <code>git add .</code>로 바뀐 파일 전부를 담습니다. <code>git commit -m "로그인 기능 추가"</code>처럼 이번 스냅샷이 무엇인지 메시지와 함께 저장하고, 마지막으로 <code>git push origin main</code>을 실행하면 이 기록이 GitHub 저장소로 올라갑니다. AI에게 코드를 맡기더라도 이 몇 줄의 흐름만 이해하고 있으면 지금 무슨 일이 일어나는지 파악할 수 있습니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 흔한 실수와 실전 습관, 핵심 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 라벨 없는 커밋과 .env 노출 같은 흔한 실수, 안전망과 학습 곡선을 저울로 비교하는 트레이드오프, git status와 git diff로 저장 전 확인하는 실전 습관, 컴퓨터가 꺼져도 GitHub에 남는다는 판별법과 핵심 요약">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 라벨 없는 세이브, 열려버린 창고 상자</h3></div>
+      <p class="key-msg">커밋 메시지 없이 대충 저장하면 나중에 어떤 변경인지 알아볼 수 없고, 비밀번호나 <code>.env</code> 파일을 실수로 커밋해 공개 저장소에 올리면 누구나 그 정보를 볼 수 있게 된다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ 커밋 메시지 없이 대충 저장</div>
+        <p>커밋할 때 메시지를 대충 적거나 아예 비워두면, 나중에 몇 주 전 기록을 되돌아볼 때 그 커밋이 무엇을 바꾼 것인지 전혀 알 수 없게 됩니다. &lsquo;로그인 버튼 색상 수정&rsquo;처럼 짧더라도 무엇을 했는지 알 수 있는 메시지를 남기는 습관이 중요합니다.</p>
+        <div class="warn-label">⚠ .env가 그대로 공개 저장소에 올라감</div>
+        <p>더 위험한 실수는 비밀번호나 API 키가 담긴 <code>.env</code> 파일을 실수로 커밋해서 GitHub 공개 저장소에 그대로 올려버리는 것입니다. 한 번 공개 저장소에 올라간 정보는 지워도 기록에 남을 수 있습니다.</p>
+        <div class="ok-label">✓ 커밋 전에 반드시 확인</div>
+        <p>커밋 전에 무엇이 포함되는지, 그리고 커밋 메시지가 의미를 담고 있는지 반드시 확인해야 합니다.</p>
+      </div>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 안전망과 학습 곡선</h3></div>
+      <p class="key-msg">Git과 GitHub를 쓰면 언제든 이전 상태로 되돌릴 수 있는 안전망이 생기지만, 브랜치와 충돌(conflict) 같은 개념을 처음 익히는 데는 학습 곡선이 따른다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>처음엔 낯설어도, 되돌릴 수 있다는 안심이 남는다</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="fe-th">안전망 (얻는 것)</th>
+              <th class="be-th">학습 곡선 (감수할 것)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">되돌리기</td><td>이전 커밋으로 언제든 복구 가능</td><td>커밋을 자주 해둬야 촘촘하게 되돌릴 수 있음</td></tr>
+            <tr><td class="axis">협업</td><td>여러 명이 동시에 안전하게 작업 가능</td><td>브랜치 개념을 새로 익혀야 함</td></tr>
+            <tr><td class="axis">충돌 상황</td><td>GitHub에 백업되어 있어 안심</td><td>충돌(conflict) 해결 방법을 배워야 함</td></tr>
+            <tr><td class="axis">체감 난이도</td><td>장기적으로는 이득이 훨씬 큼</td><td>처음엔 명령어와 개념이 낯설게 느껴짐</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">Git과 GitHub를 쓰기 시작하면 가장 크게 얻는 것은 안심입니다. 코드가 잘못돼도 이전 커밋으로 언제든 되돌아갈 수 있고, 실수로 파일을 지워도 GitHub에 백업된 기록에서 복구할 수 있습니다. 다만 처음에는 브랜치가 왜 필요한지, 두 사람이 같은 부분을 고쳤을 때 생기는 충돌을 어떻게 풀어야 하는지가 낯설게 느껴질 수 있습니다. 이런 개념은 몇 번 직접 겪어보면 금방 익숙해지고, 그 이후로는 안전망이 주는 이득이 학습 곡선의 부담을 훨씬 넘어섭니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>실전 활용: 저장 전에 먼저 확인하는 습관</h3></div>
+      <p class="key-msg">커밋하기 전에 <code>git status</code>로 무엇이 바뀌었는지 먼저 확인하고, <code>git diff</code>로 실제 변경 내용을 눈으로 검토하는 습관이 실수를 크게 줄여준다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🔍 먼저, 무엇이 바뀌었나 → <span class="fe-t">git status</span></h4>
+          <ul>
+            <li>수정된 파일 확인</li>
+            <li>새로 생긴 파일 확인</li>
+            <li>삭제된 파일 확인</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🔍 그다음, 무엇이 달라졌나 → <span class="be-t">git diff</span></h4>
+          <ul>
+            <li>삭제된 줄(빨간색) 확인</li>
+            <li>추가된 줄(초록색) 확인</li>
+            <li>의도치 않은 변경 여부 확인</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">커밋을 누르기 전에 <code>git status</code>를 실행하면 지금 어떤 파일이 수정됐고, 어떤 파일이 새로 생겼고, 어떤 파일이 삭제됐는지 한눈에 볼 수 있습니다. 여기서 의도치 않게 바뀐 파일이 섞여 있지 않은지 먼저 점검할 수 있습니다. 그다음 <code>git diff</code>를 실행하면 각 파일에서 정확히 어떤 줄이 지워지고 어떤 줄이 추가됐는지 색깔로 구분해서 보여주므로, AI가 대신 고쳐준 코드라도 실제로 무엇이 바뀌었는지 직접 눈으로 확인할 수 있습니다. 이 두 명령을 커밋 전 습관으로 만들면 원치 않는 변경을 그대로 저장해버리는 실수를 크게 줄일 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>판별법과 핵심 요약: 컴퓨터가 꺼져도 남는 것</h3></div>
+      <p class="key-msg">내 컴퓨터가 꺼져도 어딘가에 여전히 남아 있는 것이 GitHub의 기록이고, 그 기록을 만들어내는 과정 자체가 Git이다.</p>
+      <p class="body">가장 간단한 판별법은 이것입니다. 노트북을 끄거나 심지어 컴퓨터가 고장 나도 여전히 어딘가에 남아 있는 기록은 <span class="be-t">GitHub</span>에 올려둔 것이고, 아직 내 컴퓨터 안에만 있는 커밋은 push하기 전까지는 그 컴퓨터와 운명을 함께합니다. <span class="fe-t">Git</span>은 코드가 바뀌는 매 순간을 스냅샷으로 남겨 언제든 되돌아갈 수 있게 해주는 세이브 시스템이고, GitHub는 그 세이브 파일들을 인터넷 창고에 보관해 잃어버리지 않게 지켜주고 다른 사람과 나눠 쓸 수 있게 해주는 서비스입니다. 바이브 코딩을 하다 무섭게 느껴지는 순간이 와도, 커밋을 자주 남기고 GitHub에 push해두는 습관만 있다면 최악의 경우에도 처음으로 돌아가지 않아도 됩니다.</p>
+      <div class="chips">
+        <span class="chip">Git = 로컬 세이브 도구</span>
+        <span class="chip">GitHub = 원격 창고 서비스</span>
+        <span class="chip">커밋 = 스냅샷 저장</span>
+        <span class="chip">브랜치 = 평행 세계</span>
+        <span class="chip">push/pull = 창고와 주고받기</span>
+        <span class="chip">꺼져도 남으면 GitHub</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">세이브 포인트, 그리고 클라우드 창고</div>
+    <p>Git은 코드가 바뀌는 매 순간을 스냅샷으로 남겨 언제든 되돌아갈 수 있게 해주는 세이브 시스템이고, GitHub는 그 세이브 파일들을 인터넷 창고에 보관해 잃어버리지 않게 지켜주고 다른 사람과 나눠 쓸 수 있게 해줍니다.<br>커밋을 자주 남기고 GitHub에 push해두는 습관만 있다면, 바이브 코딩이 무섭게 느껴지는 순간에도 처음으로 돌아가지 않아도 됩니다.</p>
+    <span class="sig">save it, push it, never lose it</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

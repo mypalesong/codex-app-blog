@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>웹 보안 기초 — XSS·CSRF·SQL 인젝션 막기 | 12컷 이미지 스토리</title>
+<meta name="description" content="성벽과 경비 시스템에 비유해, XSS·CSRF·SQL 인젝션이 어떻게 이뤄지고 어떻게 방어하는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #f2596b;
+    --be: #34d399;
+    --fe-deep: #dc2626;
+    --be-deep: #15803d;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(242,89,107,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(242,89,107,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(47,109,240,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 원칙 인용카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #7f1d1d, #dc2626); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #14532d, #15803d); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환/흐름 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(242,89,107,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(52,211,153,0.1); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 03, 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(220,38,38,0.16); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(21,128,61,0.18); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 점검 체크리스트 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 보안(Security) · 12컷 이미지 스토리 #16</div>
+    <h1>웹 보안 기초,<br>XSS·CSRF·SQL 인젝션은 어떻게 막는가</h1>
+    <p class="subtitle">성벽과 경비 시스템에 비유해, 가장 흔한 세 가지 웹 공격과 방어 원리를 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">Attack</span><span class="vs">vs</span><span class="be">Defense</span></div>
+  </header>
+
+  <section class="intro">
+    <p>이 시리즈는 웹 애플리케이션이 가장 자주 마주치는 세 가지 공격 — <strong class="fe-t">XSS</strong>, <strong class="fe-t">CSRF</strong>, <strong class="fe-t">SQL 인젝션</strong> — 이 실제로 어떻게 이뤄지고, 개발자가 이를 어떻게 막아야 하는지를 다룹니다. 웹 보안은 성을 지키는 일과 비슷합니다. 성문마다 침입자가 노리고 있고, 성문을 지키는 <strong class="be-t">경비병</strong>이 없다면 성은 순식간에 뚫립니다. 사용자 입력을 받는 모든 지점이 성문이고, 그 성문을 지키는 검증 로직이 바로 경비병입니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 성벽과 경비의 기본 원칙 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="성벽과 침입자로 그려진 웹 보안 표지, 편지 봉투를 검사하는 경비병의 정의 장면, 무방비 성문과 경비된 성문을 비교하는 코드 장면, 모든 입력을 의심하라는 제1원칙 인용 석판">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>이 성을 어떻게 지킬 것인가</h3></div>
+      <p class="key-msg">웹 보안은 성을 지키는 일과 같다. 성문마다 침입자가 노리고 있고, 경비병이 없다면 성은 순식간에 뚫린다.</p>
+      <p class="body">이 시리즈는 웹 애플리케이션이 마주하는 가장 흔한 세 가지 공격, <span class="fe-t">XSS</span>와 <span class="fe-t">CSRF</span>와 <span class="fe-t">SQL 인젝션</span>이 어떻게 이뤄지는지, 그리고 개발자가 이를 어떻게 방어하는지를 다룹니다. 성벽에 정문이 있듯 웹 서비스에는 사용자 입력을 받는 지점이 있고, 그 지점을 지키는 경비병이 바로 <span class="be-t">검증 로직</span>입니다. 경비가 허술하면 침입자는 정문으로 당당히 걸어 들어옵니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의: 아무도 믿지 않는 것에서 시작한다</h3></div>
+      <p class="key-msg">웹 보안이란 사용자의 입력과 요청을 무조건 신뢰하지 않고, 매번 검증하는 방어적 설계 원칙이다.</p>
+      <p class="body">웹 보안은 사용자가 입력하거나 서버로 보내는 모든 데이터를 잠재적으로 위험하다고 가정하고, 그것을 실제로 사용하기 전에 검증하고 정제하는 방어적 설계 원칙입니다. 여기서 핵심은 신뢰의 방향입니다. 서버는 클라이언트에서 온 어떤 값도 그 자체로 안전하다고 믿어서는 안 됩니다. 성문 통제소의 경비병이 편지 봉투를 하나하나 돋보기로 들여다보듯, 이 원칙 하나가 지금부터 다룰 모든 방어 기법의 출발점이 됩니다. <code>never trust user input</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 무방비 성문 vs 경비된 성문</h3></div>
+      <p class="key-msg">입력을 그대로 믿고 통과시키는 코드와, 검증하고 정제한 뒤 통과시키는 코드는 결과가 완전히 다르다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">취약한 코드 — 그대로 출력</div>
+          <pre><span class="cm">// 성문을 지키는 경비병이 없다</span>
+element.innerHTML = userInput; <span class="cm">// 스크립트까지 그대로 실행됨</span></pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">안전한 코드 — 텍스트로만 처리</div>
+          <pre><span class="cm">// 방패를 든 경비병이 막아선다</span>
+element.textContent = userInput; <span class="cm">// 태그는 문자로만 표시됨</span></pre>
+        </div>
+      </div>
+      <p class="body">왼쪽처럼 사용자 입력을 <code>innerHTML</code>에 그대로 꽂아 넣으면 입력 안에 스크립트가 있어도 브라우저가 그대로 실행해 버립니다. 오른쪽처럼 <code>textContent</code>를 쓰거나 출력 시 이스케이프 처리를 하면 스크립트 태그는 실행되지 않고 순수한 텍스트로만 표시됩니다. 같은 데이터를 다루더라도 어떻게 처리하느냐에 따라 성문이 열려 있는 성과 지켜지는 성만큼의 차이가 생깁니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>제1원칙: 모든 입력은 위험하다고 가정하라</h3></div>
+      <p class="key-msg">보안 설계의 가장 유명한 제1원칙은 모든 사용자 입력을 잠재적으로 위험하다고 가정하는 것이다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">ASSUMPTION</div>
+            <div class="what">모든 사용자 입력은<br>위험하다고 가정한다</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">THEREFORE</div>
+            <div class="what">서버에서 반드시<br>다시 검증한다</div>
+          </div>
+        </div>
+        <div class="tag">rule #1</div>
+      </div>
+      <p class="body">보안 업계에서 가장 널리 통용되는 원칙은 &lsquo;모든 입력을 신뢰하지 말라&rsquo;입니다. 폼 필드, URL 파라미터, 쿠키, HTTP 헤더, 심지어 파일 업로드까지 클라이언트에서 서버로 전달되는 모든 값은 조작될 수 있다고 전제해야 합니다. 이 전제를 받아들이면 왜 클라이언트 측 검증만으로는 부족하고, 서버 측에서 반드시 다시 검증해야 하는지가 자연스럽게 설명됩니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 세 가지 공격과 방어 코드 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="XSS·CSRF·SQL 인젝션 3대 공격 카탈로그, 댓글에 스크립트가 심기는 XSS 동작 4단계, 마차 안 스크립트와 위조 명령서로 구분되는 XSS·CSRF 경계, 문자열 이어붙이기와 Prepared Statement를 비교하는 SQL 인젝션 방어 코드">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>3대 공격 카탈로그</h3></div>
+      <p class="key-msg">가장 흔한 웹 공격은 크게 세 가지다. 스크립트를 심는 XSS, 요청을 위조하는 CSRF, 쿼리를 조작하는 SQL 인젝션.</p>
+      <p class="body"><code>XSS</code>는 공격자가 악성 스크립트를 웹페이지에 심어 다른 사용자의 브라우저에서 실행시키는 공격입니다. <code>CSRF</code>는 사용자가 로그인된 상태를 악용해 사용자 몰래 서버에 원치 않는 요청을 보내는 공격입니다. <code>SQL Injection</code>은 입력값을 통해 데이터베이스 질의문 자체를 조작해 원래 의도하지 않은 데이터를 조회하거나 변경하는 공격입니다. 세 공격은 침투 경로가 다르지만 공통적으로 검증되지 않은 입력을 통로로 삼습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>XSS는 어떻게 성벽을 넘는가</h3></div>
+      <p class="key-msg">검증되지 않은 사용자 입력이 그대로 화면에 출력되면, 그 안에 담긴 스크립트가 브라우저에서 실행되어 버린다.</p>
+      <div class="flow">
+        <span class="node n-user">공격자, 댓글에 스크립트 입력</span><span class="arrow">→</span>
+        <span class="node n-api">서버, 검증 없이 그대로 저장</span><span class="arrow">→</span>
+        <span class="node n-user">다른 사용자, 같은 페이지 방문</span><span class="arrow">→</span>
+        <span class="node n-fe">브라우저, 스크립트 자동 실행</span>
+      </div>
+      <p class="body">저장형 XSS를 예로 들면, 공격자가 댓글이나 게시글에 스크립트 태그를 포함한 텍스트를 입력합니다. 서버가 이 값을 검증이나 이스케이프 없이 그대로 저장했다가 다른 사용자에게 보여줄 때, 브라우저는 그 텍스트를 그대로 HTML로 해석해 스크립트를 실행합니다. 그 결과 공격자의 코드가 피해자의 브라우저에서 피해자의 권한으로 실행되어 쿠키 탈취나 세션 하이재킹 같은 피해로 이어질 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: XSS와 CSRF는 다르다</h3></div>
+      <p class="key-msg">XSS는 피해자의 브라우저 안에서 악성 스크립트가 직접 실행되는 공격이고, CSRF는 피해자의 자격으로 서버에 몰래 요청만 보내는 공격이다.</p>
+      <p class="body">XSS는 악성 스크립트가 피해자의 브라우저라는 실행 공간 안으로 침투해 직접 코드를 실행시키는 공격입니다. 반면 CSRF는 스크립트를 심지 않고, 이미 로그인되어 인증된 피해자의 브라우저가 자동으로 실어 나르는 쿠키나 세션을 이용해 피해자 모르게 서버에 요청을 대신 보내게 만드는 공격입니다. 즉 XSS는 실행 위치가 <span class="fe-t">클라이언트(브라우저)</span>이고, CSRF는 신뢰 관계를 악용해 <span class="be-t">서버</span>로 요청을 밀어 넣는다는 점에서 방어 전략도 서로 다릅니다. <code>execution site: browser vs forged request: server</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 SQL 인젝션 방어</h3></div>
+      <p class="key-msg">문자열을 그대로 이어 붙여 만든 쿼리는 조작될 수 있지만, 파라미터를 바인딩하는 Prepared Statement는 조작을 원천 차단한다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">취약한 쿼리 — 문자열 이어붙이기</div>
+          <pre><span class="cm">// 열쇠 틈새로 침입자가 비집고 들어온다</span>
+<span class="kw">const</span> q = <span class="st">"SELECT * FROM users WHERE id = "</span> + userInput;</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">안전한 쿼리 — Prepared Statement</div>
+          <pre><span class="cm">// 파라미터는 데이터로만 고정된다</span>
+<span class="kw">const</span> q = <span class="st">"SELECT * FROM users WHERE id = ?"</span>;
+db.query(q, [userInput]);</pre>
+        </div>
+      </div>
+      <p class="body">왼쪽처럼 사용자 입력을 SQL 문자열에 그대로 이어 붙이면, 입력값 안에 따옴표나 세미콜론 같은 특수문자를 넣어 쿼리의 구조 자체를 바꿔버릴 수 있습니다. 오른쪽처럼 Prepared Statement와 파라미터 바인딩을 사용하면 사용자 입력은 항상 순수한 데이터 값으로만 취급되고, 쿼리의 구조에는 절대 영향을 주지 못합니다. 이것이 SQL 인젝션을 막는 가장 확실하고 표준적인 방법입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실수 점검과 실전 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="앞문만 지키고 뒷문을 잊은 흔한 실수 두 장면, 공격별 방어 기법을 정리한 작전판 비교표, 폼·URL·API·쿠키를 순찰하는 점검 체크리스트, 실전 판별법 질문과 여섯 개의 요약 방패 칩">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 앞문만 지키고 뒷문을 잊는다</h3></div>
+      <p class="key-msg">프론트엔드 검증만 믿고 서버 측 검증을 생략하거나, HTTPS 없이 평문으로 통신하는 것은 흔하지만 치명적인 실수다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ 프론트엔드 검증만 존재, 백엔드 검증 부재 · HTTPS 미적용</div>
+        <p>프론트엔드에서 아무리 꼼꼼히 입력값을 검사해도, 공격자는 브라우저를 거치지 않고 서버에 직접 요청을 보낼 수 있기 때문에 클라이언트 검증은 사용자 경험을 위한 보조 장치일 뿐 보안 장치가 될 수 없습니다.</p>
+        <div class="ok-label">✓ 서버 측 재검증 + HTTPS 전 구간 적용</div>
+        <p>반드시 서버에서도 동일하거나 더 엄격한 검증을 반복해야 합니다. 또한 HTTPS 없이 평문으로 통신하면 로그인 정보나 세션 토큰이 네트워크 중간에서 그대로 노출될 수 있으므로, 전송 구간 암호화는 다른 모든 방어 기법의 전제 조건입니다.</p>
+      </div>
+      <p class="body">성문 앞에만 경비병을 세우고 성벽 안쪽 통제소는 문이 활짝 열려 있다면, 침입자는 검문을 우회하는 뒷길로 슬쩍 돌아 들어갑니다. 봉인되지 않은 편지를 든 전령이 훤히 드러난 길을 걷는 것도 마찬가지입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>공격별 방어 기법 비교표</h3></div>
+      <p class="key-msg">공격마다 대응하는 표준 방어 기법이 있고, 이를 표로 정리하면 어떤 상황에 어떤 경비 체계를 배치할지 한눈에 보인다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>one attack, one standard defense</caption>
+          <thead>
+            <tr>
+              <th class="fe-th">공격 유형</th>
+              <th class="be-th">대표 방어 기법</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">XSS</td><td>출력 이스케이프 / Content-Security-Policy</td></tr>
+            <tr><td class="axis">CSRF</td><td>CSRF 토큰 검증</td></tr>
+            <tr><td class="axis">SQL Injection</td><td>Prepared Statement / 파라미터 바인딩</td></tr>
+            <tr><td class="axis">도청 · 평문 노출</td><td>HTTPS 강제 적용</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">XSS는 사용자에게 보여줄 데이터를 출력하는 시점에 HTML 특수문자를 이스케이프하고, Content-Security-Policy 헤더로 스크립트 실행 범위를 제한해 방어합니다. CSRF는 요청마다 예측 불가능한 토큰을 발급해 서버가 그 토큰을 함께 검증함으로써, 공격자가 만든 위조 요청에는 정상 토큰이 없다는 점을 이용해 막습니다. SQL 인젝션은 파라미터 바인딩으로, 평문 노출은 HTTPS 적용으로 방어합니다. 공격과 방어는 일대일로 짝지어 기억하면 실무에서 빠르게 적용할 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>언제 무엇을 점검하나: 성문 순찰 체크리스트</h3></div>
+      <p class="key-msg">사용자 입력을 받는 모든 지점, 즉 폼과 URL 파라미터와 API 바디는 예외 없이 보안 점검 대상이다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🔍 직접 입력하는 통로</h4>
+          <ul>
+            <li>폼 입력 필드 (로그인 · 검색창)</li>
+            <li>URL 파라미터</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🔍 자동으로 전달되는 통로</h4>
+          <ul>
+            <li>API 요청 바디</li>
+            <li>쿠키 및 헤더</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">보안 점검은 사용자로부터 데이터가 들어오는 모든 통로에서 이뤄져야 합니다. 로그인 폼과 검색창 같은 폼 필드는 물론, 주소창에 노출되는 URL 파라미터, 화면에 보이지 않는 API 요청의 바디, 그리고 브라우저가 자동으로 전송하는 쿠키와 헤더까지 전부 조작 가능한 입력 지점입니다. 개발자는 새로운 기능을 추가할 때마다 이 네 가지 통로 중 어디를 새로 열었는지 점검하는 습관을 들여야 합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>실전 판별법과 핵심 요약</h3></div>
+      <p class="key-msg">&ldquo;이 입력값이 그대로 쿼리나 화면에 들어가는가?&rdquo;라는 질문 하나로 대부분의 취약점을 미리 걸러낼 수 있다.</p>
+      <p class="body">실무에서 가장 빠른 판별법은 다음 질문을 스스로에게 던지는 것입니다. 지금 다루는 이 사용자 입력값이 나중에 그대로 SQL 쿼리에 들어가는가, 아니면 그대로 화면 HTML에 출력되는가. 답이 그렇다라면 그 지점은 예외 없이 이스케이프나 파라미터 바인딩 같은 방어 처리를 거쳐야 합니다.</p>
+      <div class="chips">
+        <span class="chip">모든 입력은 의심하라</span>
+        <span class="chip">출력 시 이스케이프</span>
+        <span class="chip">CSRF 토큰 검증</span>
+        <span class="chip">Prepared Statement 사용</span>
+        <span class="chip">서버 측 검증 필수</span>
+        <span class="chip">HTTPS 전 구간 적용</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">성문은 늘 열려 있고, 순찰은 끝나지 않는다</div>
+    <p>모든 입력을 의심하고, 출력 시 이스케이프하고, CSRF 토큰을 검증하고, Prepared Statement를 쓰고, 서버 측 검증을 생략하지 않고, HTTPS를 전 구간에 적용하는 것 — 이 여섯 가지가 웹 보안의 기본기입니다.<br>새 기능을 열 때마다 새로운 성문이 생기고, 그 성문에도 같은 경비가 필요합니다.</p>
+    <span class="sig">assume nothing, verify everything</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

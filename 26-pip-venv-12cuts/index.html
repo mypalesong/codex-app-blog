@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pip와 가상환경(venv) — 파이썬 패키지를 안전하게 관리하기 | 12컷 이미지 스토리</title>
+<meta name="description" content="프로젝트마다 따로 마련한 작업실에 비유해, venv와 pip가 각각 무엇을 해결하는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #6fa8e0;
+    --be: #ffd43b;
+    --fe-deep: #306998;
+    --be-deep: #a6790a;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(111,168,224,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(111,168,224,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(48,105,152,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #1d4569, #3f7cb0); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #8a6106, #d1a015); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(111,168,224,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(255,212,59,0.1); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(48,105,152,0.22); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(255,212,59,0.14); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 디버깅 가이드 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 파이썬 패키지 관리 · 12컷 이미지 스토리 #26</div>
+    <h1>pip와 가상환경(venv),<br>파이썬 패키지를 안전하게 관리하기</h1>
+    <p class="subtitle">프로젝트마다 따로 마련하는 &lsquo;작업실(venv)&rsquo;과 그 안으로 도구를 배달하는 &lsquo;택배기사(pip)&rsquo;에 비유해 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">venv</span><span class="vs">+</span><span class="be">pip</span></div>
+  </header>
+
+  <section class="intro">
+    <p>파이썬으로 프로젝트를 몇 개만 만들어 봐도 금방 알게 되는 사실이 있습니다. 이 프로젝트는 어떤 라이브러리의 옛날 버전이 필요하고, 저 프로젝트는 최신 버전이 필요한 상황이 반드시 찾아온다는 것입니다. 이 글에서는 그런 충돌을 막기 위해 프로젝트마다 독립된 작업실을 마련해주는 <strong class="fe-t">venv</strong>와, 그 작업실 안으로 필요한 도구를 배달해주는 <strong class="be-t">pip</strong>를 하나씩 풀어봅니다. 컴퓨터 한 대 안에서도 프로젝트마다 완전히 다른 방을 쓸 수 있다는 것, 그것이 이 모든 이야기의 출발점입니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 두 도구의 발견 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 노트북 뒤로 갈라지는 여러 개의 작업실, venv와 pip의 정의, 작업실을 쓴 경우와 안 쓴 경우 비교, 한 문장으로 정리한 명패">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>내 컴퓨터엔 왜 작업실이 여러 개 필요할까</h3></div>
+      <p class="key-msg">파이썬 프로젝트를 여러 개 만들다 보면 어느 순간 패키지 버전들이 서로 부딪히기 시작한다.</p>
+      <p class="body">노트북 화면 속 평범한 파이썬 편집기. 그 뒤쪽 공간이 건물 단면도처럼 갈라지면, 나란히 늘어선 작은 방들이 드러납니다. 각 방은 <span class="fe-t">Python 블루</span> 문으로 표시되고 문 앞에는 프로젝트 이름표가 붙어 있으며, 방과 방 사이는 회색 벽으로 완전히 분리되어 서로 통하지 않습니다. 방 하나 앞에는 노란 택배 상자를 든 택배기사가 서 있습니다. 이 시리즈는 그런 충돌을 막기 위해 프로젝트마다 독립된 작업실을 마련하는 <code>venv</code>와, 그 작업실 안으로 필요한 도구를 배달해주는 <code>pip</code>를 하나씩 풀어봅니다. 컴퓨터 한 대 안에서도 프로젝트마다 완전히 다른 방을 쓸 수 있다는 것이 핵심입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: 작업실과 택배기사</h3></div>
+      <p class="key-msg">venv는 프로젝트마다 독립된 파이썬 실행 환경(작업실)을 만들어주는 도구이고, pip는 그 환경 안에 필요한 패키지(도구)를 설치해주는 패키지 관리자다.</p>
+      <p class="body"><span class="fe-t">venv(virtual environment)</span>는 파이썬 프로젝트마다 독립된 실행 공간을 만들어주는 표준 도구입니다. 이 공간 안에는 그 프로젝트만을 위한 파이썬 인터프리터와 패키지 저장소가 따로 마련됩니다. <span class="be-t">pip</span>는 파이썬의 공식 패키지 관리자로, <code>pip install</code> 한 줄이면 필요한 라이브러리를 인터넷에서 받아와 지금 활성화된 작업실 안에 설치해줍니다. 작업실이 없으면 택배기사가 물건을 아무 데나 쌓아두듯, venv 없이 pip만 쓰면 모든 패키지가 한 곳(전역 환경)에 뒤섞이게 됩니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 작업실을 쓴 경우와 안 쓴 경우</h3></div>
+      <p class="key-msg">가상환경을 쓰면 프로젝트마다 독립된 패키지 버전을 유지할 수 있지만, 쓰지 않으면 모든 프로젝트가 하나의 전역 환경을 공유해 버전이 충돌한다.</p>
+      <p class="body">가상환경을 프로젝트마다 만들어 쓰면 각 방 안의 선반에 그 프로젝트에 맞는 패키지 버전만 따로 보관되므로(<code>requests 2.0</code>, <code>requests 1.5</code>, <code>requests 2.8</code>처럼), 다른 프로젝트의 버전과 절대 부딪히지 않습니다. 반대로 가상환경 없이 시스템 전체에 하나뿐인 전역 환경에 계속 설치하면, 프로젝트 A가 요구하는 버전과 프로젝트 B가 요구하는 버전이 같은 이름의 창고 안에서 서로 덮어써버립니다. 결국 한쪽 프로젝트가 갑자기 실행되지 않는 상황이 벌어지는데, 이는 대부분 방을 나누지 않고 창고를 함께 쓴 탓입니다. <code>isolated — no conflict</code> / <code>global — version clash</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>한 문장으로 정리하면</h3></div>
+      <p class="key-msg">venv는 프로젝트마다 독립된 작업 공간을 만드는 도구이고, pip는 그 공간 안에 필요한 패키지를 설치하는 도구다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">VENV</div>
+            <div class="what">프로젝트마다<br>독립된 작업 공간</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">PIP</div>
+            <div class="what">그 공간 안에<br>도구를 배달</div>
+          </div>
+        </div>
+        <div class="tag">definition</div>
+      </div>
+      <p class="body">이 한 문장만 기억해도 왜 파이썬 프로젝트를 시작할 때마다 새 폴더에서 venv를 만드는지 이해할 수 있습니다. 방을 먼저 짓고, 그다음 그 방 안에서만 물건(패키지)을 들이는 순서라고 생각하면 됩니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 도구와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 작업실을 짓고 채우는 도구 카탈로그, 배달이 방 안으로 들어오는 동작 원리 다이어그램, 문을 나서도 남아 있는 것들, 터미널 명령으로 보는 실제 코드">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>관련 도구 카탈로그: 작업실을 짓고 채우는 도구들</h3></div>
+      <p class="key-msg">작업실을 만들고, 문을 열고 닫고, 도구를 들이는 각 단계마다 정해진 명령어와 파일이 있으며, 이 도구들을 알면 가상환경 관리가 한눈에 들어온다.</p>
+      <p class="body"><code>python -m venv venv</code>는 현재 폴더 안에 venv라는 이름의 새 작업실을 짓는 명령이고, Windows에서는 <code>venv\Scripts\activate</code>, Mac이나 Linux에서는 <code>source venv/bin/activate</code>로 그 작업실의 문을 열고 들어갑니다. 문을 연 상태(활성화된 상태)에서 <code>pip install</code>을 실행하면 패키지가 정확히 그 작업실 안에만 설치됩니다. <code>requirements.txt</code>는 이 작업실에 어떤 도구들이 배달되었는지 적어둔 목록 문서로, 다른 컴퓨터에서도 같은 작업실을 그대로 재현할 때 씁니다. <code>conda</code>는 pip와 venv를 합친 것과 비슷한 역할을 하는 또 다른 도구로, 특히 데이터 과학 분야에서 자주 쓰입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 배달이 방 안으로 들어오는 흐름</h3></div>
+      <p class="key-msg">작업실 문을 열어야만 pip가 배달하는 패키지가 정확히 그 방 안에 쌓이고, 문이 닫혀 있으면(활성화하지 않으면) 배달은 엉뚱한 전역 창고로 향한다.</p>
+      <div class="flow">
+        <span class="node n-user">python -m venv venv</span><span class="arrow">→</span>
+        <span class="node n-fe">activate (문 열기)</span><span class="arrow">→</span>
+        <span class="node n-api">(venv) 표시 확인</span><span class="arrow">→</span>
+        <span class="node n-be">pip install requests</span><span class="arrow">→</span>
+        <span class="node n-api">패키지 설치 완료</span><span class="arrow">→</span>
+        <span class="node n-fe">이 작업실에만 저장</span>
+      </div>
+      <p class="body">가장 먼저 <code>python -m venv venv</code> 명령으로 프로젝트 폴더 안에 작업실(가상환경 폴더)을 짓습니다. 그다음 Windows에서는 <code>venv\Scripts\activate</code>, Mac/Linux에서는 <code>source venv/bin/activate</code>로 그 작업실의 문을 열면, 터미널 프롬프트 앞에 <code>(venv)</code> 표시가 붙어 지금 이 방 안에 있다는 것을 알려줍니다. 이 상태에서 <code>pip install 패키지이름</code>을 실행해야 그 패키지가 정확히 이 작업실 안에만 설치되고, 다른 프로젝트의 작업실에는 전혀 영향을 주지 않습니다. 문을 열지 않은 채 pip를 쓰면 배달물이 작업실이 아니라 컴퓨터 전체가 공유하는 전역 창고로 들어가 버립니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 문을 나섰는데도 남아 있는 것들</h3></div>
+      <p class="key-msg">가상환경을 나가도(deactivate) 작업실 자체는 폴더로 그대로 남아 있으며, 시스템에 원래 설치된 파이썬과 작업실 안의 파이썬은 서로 다른 존재라는 점을 헷갈리기 쉽다.</p>
+      <p class="body"><code>deactivate</code> 명령으로 작업실 밖으로 나와도 venv 폴더 자체와 그 안에 설치된 패키지들은 삭제되지 않고 그대로 남아 있습니다. 다시 활성화 명령을 실행하면 언제든 같은 작업실로 돌아갈 수 있습니다. 또 하나 헷갈리기 쉬운 점은, 컴퓨터에 원래 설치된 <strong>system python</strong>(예: <code>/usr/bin/python</code>)과 가상환경 안의 <strong>venv python</strong>(예: <code>venv/Scripts/python.exe</code>)은 실행 파일 경로 자체가 다른, 사실상 별개의 존재라는 것입니다. 어느 파이썬과 pip가 지금 사용되고 있는지 헷갈릴 때는 터미널 프롬프트에 <code>(venv)</code> 표시가 있는지부터 확인하는 것이 가장 확실합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 차이: 작업실을 짓고 도구를 들이는 실제 명령</h3></div>
+      <p class="key-msg">가상환경을 만들고 활성화한 뒤 패키지를 설치하고 목록을 저장하는 과정은 몇 줄의 터미널 명령으로 이루어진다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">venv — 작업실 짓고 열기</div>
+          <pre><span class="cm"># 작업실을 짓는다</span>
+python -m venv venv
+
+<span class="cm"># Windows: 문을 연다</span>
+venv\Scripts\activate
+
+<span class="cm"># Mac/Linux: 문을 연다</span>
+source venv/bin/activate</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">pip — 도구를 들이고 기록한다</div>
+          <pre><span class="cm"># 프롬프트 앞에 (venv) 확인 후</span>
+pip install requests
+
+<span class="cm"># 설치 목록을 그대로 저장한다</span>
+pip freeze &gt; requirements.txt</pre>
+        </div>
+      </div>
+      <p class="body"><code>python -m venv venv</code>로 작업실을 짓고, 운영체제에 맞게 <code>venv\Scripts\activate</code> 또는 <code>source venv/bin/activate</code>로 문을 열면 프롬프트 앞에 <code>(venv)</code>가 붙습니다. 그 상태에서 <code>pip install requests</code>를 실행하면 requests 패키지가 이 작업실 안에만 설치됩니다. 마지막으로 <code>pip freeze &gt; requirements.txt</code>를 실행하면 지금 이 작업실 안에 어떤 패키지와 버전이 들어 있는지 그대로 목록 파일로 저장할 수 있어, 다른 컴퓨터에서도 같은 작업실을 그대로 다시 지을 수 있습니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 문을 안 열고 배달받는 흔한 실수, 작업실을 나누는 것의 트레이드오프 비교표, 지금 어느 작업실에 있는지 확인하는 법, 판별법과 핵심 요약 칩">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 문을 안 열고 배달을 받는 택배기사</h3></div>
+      <p class="key-msg">가상환경을 활성화하지 않은 채 pip install을 실행하면 전역 환경이 오염되고, requirements.txt를 갱신하지 않으면 다른 사람의 컴퓨터에서 패키지가 맞지 않는 문제가 생긴다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ no (venv) prefix = danger</div>
+        <p>가상환경을 활성화하지 않은 채 <code>pip install</code>을 실행하면 패키지가 프로젝트 전용 작업실이 아니라 컴퓨터 전체가 공유하는 전역 환경에 설치되어, 다른 프로젝트와 버전이 뒤섞이는 오염이 발생합니다. 터미널 프롬프트에 <code>(venv)</code> 표시가 없다면 아직 작업실 밖이라는 뜻입니다.</p>
+        <div class="ok-label">✓ 매번 확인하고 기록하는 습관</div>
+        <p>터미널 프롬프트에 <code>(venv)</code> 표시가 있는지 항상 먼저 확인하는 습관이 이 실수를 막아줍니다. 또한 새 패키지를 설치할 때마다 <code>pip freeze &gt; requirements.txt</code>로 목록을 갱신해두지 않으면, 나중에 다른 사람이나 다른 컴퓨터에서 같은 프로젝트를 열었을 때 필요한 패키지가 빠져 있거나 버전이 달라 실행이 안 되는 문제가 생깁니다.</p>
+      </div>
+      <p class="body">문이 닫힌 작업실 앞에서 택배기사가 상자를 문틈으로 밀어 넣는 대신 옆의 큰 전역 창고에 잘못 쌓아버리는 장면을 상상해 보세요. 낡고 먼지 쌓인 <code>requirements.txt</code> 문서 옆에는 최근 설치된 패키지들이 기록되지 않은 채 쌓여 있고, 이 상태로 다른 컴퓨터에서 프로젝트를 열면 오류부터 마주하게 됩니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 작업실을 나누는 것의 득과 실</h3></div>
+      <p class="key-msg">프로젝트마다 독립된 작업실을 유지하면 충돌을 막을 수 있지만, 그 대신 매번 활성화 명령을 챙겨야 하는 번거로움이 따른다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>isolation, guaranteed — one extra step, every time</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="fe-th">가상환경 사용 (venv)</th>
+              <th class="be-th">전역 환경 그대로 (no venv)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">버전 충돌</td><td>프로젝트마다 격리되어 충돌 없음</td><td>같은 이름의 패키지가 뒤섞여 충돌</td></tr>
+            <tr><td class="axis">프로젝트 삭제 · 재생성</td><td>다른 프로젝트에 영향 없음</td><td>삭제·변경 시 다른 프로젝트도 영향받을 수 있음</td></tr>
+            <tr><td class="axis">매번 필요한 절차</td><td>activate 명령을 잊지 않아야 함</td><td>별도 절차 없이 바로 설치 가능</td></tr>
+            <tr><td class="axis">재현성</td><td><code>requirements.txt</code>로 동일 환경 재현 가능</td><td>전역 상태라 재현이 어려움</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">가상환경을 프로젝트마다 만들어 쓰면 각 작업실이 완전히 분리되어 있어 패키지 버전 충돌을 원천적으로 막을 수 있고, 한 프로젝트를 지우거나 다시 만들 때도 다른 프로젝트에 영향을 주지 않습니다. 다만 그 대가로 터미널을 새로 열 때마다, 혹은 프로젝트를 바꿀 때마다 매번 활성화 명령을 실행해야 하는 번거로움이 생깁니다. 이 번거로움은 에디터의 자동 활성화 기능이나 스크립트로 어느 정도 줄일 수 있지만, 활성화 자체를 잊어버리면 앞서 본 흔한 실수로 바로 이어진다는 점을 기억해야 합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>실전 활용: 지금 어느 작업실에 있는지 확인하는 법</h3></div>
+      <p class="key-msg">터미널 프롬프트 앞의 (venv) 표시로 지금 가상환경이 켜져 있는지 확인하고, pip freeze로 지금 작업실에 무엇이 들어 있는지 언제든 스냅샷을 남길 수 있다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🔍 &ldquo;지금 작업실 안에 있는가&rdquo; <span class="fe-t">venv 확인</span></h4>
+          <ul>
+            <li>터미널 프롬프트 맨 앞 확인</li>
+            <li><code>(venv)</code> 표시가 있으면 작업실 안</li>
+            <li>표시가 없으면 아직 문 밖</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🔍 &ldquo;지금 무엇이 들어있는가&rdquo; <span class="be-t">pip 확인</span></h4>
+          <ul>
+            <li><code>pip freeze</code> 실행</li>
+            <li><code>requirements.txt</code>로 저장</li>
+            <li>다른 컴퓨터에서 재현 가능한지 확인</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">지금 가상환경이 켜져 있는지 헷갈릴 때는 터미널 프롬프트 맨 앞을 보면 됩니다. <code>(venv)</code>라는 표시가 붙어 있으면 지금 이 작업실 안에서 명령을 실행하고 있다는 뜻이고, 표시가 없다면 아직 문을 열지 않은 상태입니다. 그리고 지금 이 작업실에 어떤 패키지들이 어떤 버전으로 설치되어 있는지 궁금하거나 다른 컴퓨터에도 똑같이 재현하고 싶다면, <code>pip freeze &gt; requirements.txt</code>를 실행해 현재 상태를 그대로 파일에 저장해두면 됩니다. 이 두 습관만 챙겨도 가상환경 관련 사고의 대부분을 미리 막을 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>판별법과 핵심 요약: 방을 나눴는가</h3></div>
+      <p class="key-msg">프로젝트마다 독립된 작업실(venv)이 있고 그 안에서만 도구(pip)를 들였는가, 그것이 파이썬 패키지 관리가 잘 되고 있는지 가르는 가장 간단한 기준이다.</p>
+      <p class="body">가장 간단한 판별법은 이것입니다. 지금 이 프로젝트가 자기만의 작업실(가상환경)을 가지고 있고, 그 방의 문을 연 상태에서만 pip로 도구를 들였는가를 확인하는 것입니다. venv는 프로젝트마다 독립된 공간을 만들어 패키지 버전 충돌을 막아주고, pip는 그 공간 안에 정확히 필요한 패키지만 배달해주는 역할을 합니다. 프롬프트의 <code>(venv)</code> 표시를 확인하는 습관과 <code>requirements.txt</code>를 꾸준히 갱신하는 습관만 있으면, 프로젝트가 몇 개로 늘어나도 방마다 조용히 자기 할 일을 하는 작업실들처럼 서로 부딪히지 않고 유지됩니다.</p>
+      <div class="chips">
+        <span class="chip">venv는 작업실, pip는 택배기사</span>
+        <span class="chip">활성화해야 문이 열린다</span>
+        <span class="chip">(venv) 표시로 확인</span>
+        <span class="chip">pip freeze로 기록</span>
+        <span class="chip">안 나누면 버전 충돌</span>
+        <span class="chip">판별법: 방이 나뉘어 있는가</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">하나의 프로젝트, 하나의 작업실</div>
+    <p>venv는 프로젝트마다 독립된 작업 공간을 만들어 패키지 버전이 서로 부딪히지 않게 지켜주고, pip는 그 공간 안에 필요한 도구만 정확히 배달합니다.<br>문을 나서도 남아 있는 작업실처럼, 잘 나뉜 방들은 프로젝트가 늘어나도 서로 조용히 자기 할 일을 계속합니다.</p>
+    <span class="sig">one project, one room</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

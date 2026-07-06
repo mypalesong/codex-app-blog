@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTTP 요청과 응답 — 주소창에 엔터를 치면 무슨 일이 벌어지는가 | 12컷 이미지 스토리</title>
+<meta name="description" content="편지 주고받기에 비유해, 브라우저 주소창에 엔터를 치는 순간부터 화면이 뜨기까지 HTTP 요청과 응답의 여정을 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #2fc9c8;
+    --be: #a78bfa;
+    --fe-deep: #0ea5a4;
+    --be-deep: #8b5cf6;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(47,201,200,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(47,201,200,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(14,165,164,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #0b7d7c, #14b8b6); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #6d3fe0, #9a70f7); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (씬 05) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(47,201,200,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(167,139,250,0.1); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #6fd3d2; }
+  .code-card pre .st { color: #c3aaf9; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(14,165,164,0.16); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(139,92,246,0.14); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 판단 가이드 (씬 07·11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 백엔드/네트워크 기초 · 12컷 이미지 스토리 #02</div>
+    <h1>HTTP 요청과 응답,<br>주소창에 엔터를 치면 무슨 일이 벌어지는가</h1>
+    <p class="subtitle">브라우저가 부치는 &lsquo;청록색 편지&rsquo;와 서버가 돌려보내는 &lsquo;보라색 답장&rsquo;에 비유해 HTTP의 왕복 여정을 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">Request</span><span class="vs">↔</span><span class="be">Response</span></div>
+  </header>
+
+  <section class="intro">
+    <p>주소창에 엔터를 치는 그 짧은 순간, 눈에 보이지 않는 편지 한 통이 우체국을 향해 날아갑니다. 브라우저가 작성해 부치는 이 편지가 <strong class="fe-t">HTTP 요청(Request)</strong>이고, 서버라는 사무실이 그 편지를 읽고 돌려보내는 답장이 <strong class="be-t">HTTP 응답(Response)</strong>입니다. 이 글은 그 편지가 어떻게 쓰이고, 어떤 길을 지나 배달되고, 어떻게 답장을 받아 화면이라는 그림으로 완성되는지를 처음부터 끝까지 따라가는 한 편의 그림책입니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 편지의 발견: HTTP라는 약속 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 주소창에서 날아오르는 청록색 편지, 클라이언트와 서버가 맞잡은 HTTP 계약서, 요청 편지와 응답 편지의 구조 비교, 상태를 기억하지 않는 프로토콜 인용카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>편지 한 통이 시작되는 순간</h3></div>
+      <p class="key-msg">브라우저 주소창에 엔터를 치는 그 짧은 순간, 눈에 보이지 않는 편지 한 통이 우체국을 향해 날아간다.</p>
+      <p class="body">주소창에 <code>https://example.com</code>을 입력하고 엔터를 누르면, 그 자리에서 <span class="fe-t">청록색 편지</span> 한 통이 튕겨 나오듯 솟아올라 저 멀리 우체국 — 서버 — 을 향해 날아갑니다. 이 편지가 바로 HTTP 요청(Request)입니다. 편지가 지나간 궤적 뒤에는 <span class="be-t">보라색 잔상</span>이 남는데, 이는 곧 돌아올 답장, 즉 HTTP 응답을 암시합니다. 이 그림책은 그 편지가 어떻게 쓰이고 어떻게 답장을 받는지를 처음부터 끝까지 따라갑니다. <code>GET / HTTP 1.1</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: HTTP란 무엇인가</h3></div>
+      <p class="key-msg">HTTP는 클라이언트와 서버가 &ldquo;이런 형식으로 편지를 주고받자&rdquo;라고 미리 약속한 통신 규칙이다.</p>
+      <p class="body"><code>HTTP(HyperText Transfer Protocol)</code>는 클라이언트와 서버가 정보를 주고받을 때 지키기로 약속한 통신 규칙입니다. 마주 보고 선 두 건물 — 작은 집 모양의 <span class="fe-t">클라이언트(브라우저)</span>와 큰 건물 모양의 <span class="be-t">서버</span> — 이 계약서 양쪽 끝을 나눠 붙잡고 있는 장면을 떠올려 보세요. 이 규칙 덕분에 크롬이든 사파리든, 파이썬 서버든 자바 서버든 상관없이 동일한 형식으로 편지를 쓰고 읽을 수 있습니다. 즉 HTTP는 특정 프로그램이 아니라 &lsquo;이렇게 편지를 쓰자&rsquo;는 약속 그 자체입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>편지 두 장: 요청과 응답의 구조</h3></div>
+      <p class="key-msg">요청은 발신 편지, 응답은 답장 편지다. 두 편지 모두 정해진 칸에 정해진 내용을 채워 넣는다.</p>
+      <p class="body">HTTP 요청은 어떤 방법으로(<code>Method</code>), 어디에(<code>URL</code>), 어떤 부가 정보와 함께(<code>Headers</code>), 무엇을 담아(<code>Body</code>) 보낼지를 적은 편지입니다. HTTP 응답은 그 요청이 성공했는지 실패했는지를 알리는 상태 코드(<code>Status Code</code>)와 함께, 역시 Headers와 Body를 담아 돌려주는 답장입니다. 청록색 편지지에는 &ldquo;GET /users/1&rdquo;이라는 도장이, 보라색 편지지에는 큼직한 &ldquo;200 OK&rdquo; 도장이 찍혀 있을 뿐 — 두 편지는 형식만 다를 뿐 같은 뼈대(상태 줄, 헤더, 본문)를 공유합니다. <code>Request = Method + URL + Headers + Body / Response = Status + Headers + Body</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>핵심 정의: 상태를 기억하지 않는 프로토콜</h3></div>
+      <p class="key-msg">HTTP는 이전 편지를 기억하지 못하는, 상태를 저장하지 않는(stateless) 프로토콜이다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">REQUEST</div>
+            <div class="what">매번 완전히 독립된<br>새로운 편지</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">SERVER</div>
+            <div class="what">응답을 보낸 뒤에는<br>아무것도 기억하지 않는다</div>
+          </div>
+        </div>
+        <div class="tag">stateless</div>
+      </div>
+      <p class="body">HTTP는 상태를 저장하지 않는(stateless) 프로토콜입니다. 서버는 하나의 요청을 처리하고 응답을 보낸 뒤, 그 요청에 대한 어떤 정보도 스스로 기억하지 않습니다. 매번 같은 표정으로 편지를 받아 드는 우체부처럼, 서버에게 도착하는 편지는 이전 편지와 무관한, 완전히 독립된 새로운 편지로 취급됩니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 편지의 여정과 말투 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 클릭에서 화면까지 6단계 우체국 여정 지도, GET·POST·PUT·DELETE 네 개의 편지 도장, 상태 코드를 나타내는 신호등, fetch 코드와 JSON 응답 카드">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>우체국 여정: 클릭에서 화면까지 6단계</h3></div>
+      <p class="key-msg">엔터 한 번에 편지는 주소를 찾고, 길을 뚫고, 배달되고, 처리되고, 답장을 받아 다시 그림으로 그려지는 6단계 여정을 거친다.</p>
+      <div class="flow">
+        <span class="node n-user">① DNS 조회</span><span class="arrow">→</span>
+        <span class="node n-user">② TCP 연결</span><span class="arrow">→</span>
+        <span class="node n-fe">③ HTTP 요청 전송</span><span class="arrow">→</span>
+        <span class="node n-be">④ 서버 처리</span><span class="arrow">→</span>
+        <span class="node n-be">⑤ HTTP 응답 전송</span><span class="arrow">→</span>
+        <span class="node n-fe">⑥ 브라우저 렌더링</span>
+      </div>
+      <p class="body">엔터를 치는 순간부터 화면이 뜨기까지는 여섯 단계를 거칩니다. 먼저 DNS로 도메인의 실제 주소(IP)를 찾고, TCP로 서버와 통로를 연결한 뒤, HTTP 요청을 전송합니다. 서버는 이를 처리해 HTTP 응답을 돌려보내고, 브라우저는 그 응답을 읽어 화면을 그려냅니다. 주소록을 뒤지고, 길을 뚫고, 편지를 부치고, 사무실에서 서류를 처리하고, 답장을 부치고, 마지막으로 그 답장을 그림으로 조립하는 이 여섯 정거장이 보통 수십에서 수백 밀리초 사이에 모두 끝납니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>요청의 말투: GET·POST·PUT·DELETE</h3></div>
+      <p class="key-msg">요청 메서드는 편지를 쓰는 말투다. &ldquo;보여주세요&rdquo;, &ldquo;만들어주세요&rdquo;, &ldquo;바꿔주세요&rdquo;, &ldquo;지워주세요&rdquo;라는 네 가지 말투가 있다.</p>
+      <p class="body">HTTP 메서드는 서버에게 어떤 동작을 해달라고 요청하는지를 나타내는 동사입니다. 도구상자 안에 나란히 놓인 네 개의 편지 도장을 떠올려 보세요. <code>GET</code>은 데이터를 조회하고(&ldquo;보여주세요&rdquo;), <code>POST</code>는 새 데이터를 생성하며(&ldquo;만들어주세요&rdquo;), <code>PUT</code>은 데이터 전체를 교체하고(&ldquo;통째로 바꿔주세요&rdquo;), <code>DELETE</code>는 데이터를 삭제합니다(&ldquo;지워주세요&rdquo;). 여기에 일부 필드만 수정하는 다섯 번째 보조 도장 <code>PATCH</code>(&ldquo;일부만 바꿔주세요&rdquo;)까지 더하면, 이 다섯 가지 말투로 대부분의 웹 API 동작을 표현할 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>신호등처럼 읽는 상태 코드</h3></div>
+      <p class="key-msg">응답 상태 코드는 신호등과 같다. 초록은 성공, 노랑은 다른 곳으로, 빨강 두 종류는 손님 잘못과 우체국 잘못으로 나뉜다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🚦 초록 · 노랑 &mdash; <span class="fe-t">가던 길을 안내</span></h4>
+          <ul>
+            <li>2xx: 성공 &mdash; 예: 200 OK</li>
+            <li>3xx: 다른 곳으로 안내 &mdash; 예: 301 Moved</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🚦 빨강 두 개 &mdash; <span class="be-t">누구의 잘못인가</span></h4>
+          <ul>
+            <li>4xx: 손님(클라이언트) 실수 &mdash; 예: 404 Not Found</li>
+            <li>5xx: 우체국(서버) 실수 &mdash; 예: 500 Internal Server Error</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">상태 코드는 응답 편지의 첫 줄에 적힌 결과 요약입니다. 2xx는 요청이 성공했다는 뜻이고, 3xx는 다른 위치로 다시 요청하라는 안내이며, 4xx는 클라이언트가 잘못된 요청을 보냈다는 뜻이고, 5xx는 서버 내부에서 문제가 생겼다는 뜻입니다. 자주 헷갈리는 400번대와 500번대의 차이는 잘못의 주체입니다. 400번대는 요청을 보낸 쪽의 실수, 500번대는 편지를 받은 서버 쪽의 실수입니다. <code>4xx = 요청이 잘못됨, 5xx = 서버가 처리 중 고장남</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 편지: fetch()와 JSON 응답</h3></div>
+      <p class="key-msg">개발자가 코드로 편지를 쓰면 브라우저가 실제 요청을 보내고, 서버는 JSON이라는 규격화된 답장을 돌려준다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">요청 코드 (JavaScript) — 편지를 대신 써 주는 도구</div>
+          <pre><span class="cm">// GET 메서드로 요청 편지를 부친다</span>
+<span class="kw">const</span> res = <span class="kw">await</span> fetch(<span class="st">'/api/users/1'</span>);
+<span class="kw">const</span> user = <span class="kw">await</span> res.json();</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">응답 데이터 (JSON) — 규격화된 답장</div>
+          <pre>{
+  <span class="st">"id"</span>: 1,
+  <span class="st">"name"</span>: <span class="st">"지민"</span>
+}</pre>
+        </div>
+      </div>
+      <p class="body"><code>fetch('/api/users/1')</code> 같은 코드 한 줄은 실제로는 GET 메서드로 해당 URL에 HTTP 요청을 보내라는 지시입니다. 서버는 이 요청을 처리한 뒤 보통 JSON 형식으로 응답 본문을 채워 돌려줍니다. JSON은 사람도 읽기 쉽고 여러 프로그래밍 언어에서 공통으로 다룰 수 있는 규격화된 데이터 형식이라, 마치 각 필드가 개별 서랍에 담긴 서류함처럼 요청과 응답 사이의 언어 차이를 없애 줍니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 매번 초면 취급 당하다 신분증(쿠키)을 걸고 다시 방문하는 손님, 편지 봉투에 붙은 주요 헤더 스티커, GET과 POST 편지함의 멱등성 비교, 개발자도구 Network 탭과 핵심 요약 칩">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>기억 못 하는 편지: 로그인은 어떻게 유지되는가</h3></div>
+      <p class="key-msg">HTTP는 매번 기억을 잃기 때문에, 로그인 상태를 유지하려면 편지에 신분증(쿠키, 세션, 토큰)을 함께 넣어 보내야 한다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ 헤더를 빠뜨리면? 매번 초면 취급 당하는 손님이 된다</div>
+        <p>HTTP는 상태를 저장하지 않기 때문에, 서버는 같은 사용자가 보낸 요청이라도 매번 처음 보는 손님처럼 대합니다. 창구를 두 번 세 번 방문해도 직원은 똑같이 &ldquo;누구세요?&rdquo;라고 묻습니다. 흔한 실수는 인증 정보를 헤더에 제대로 담지 못해 매 요청마다 로그인이 풀린 것처럼 동작하는 경우입니다.</p>
+        <div class="ok-label">✓ 요청마다 신분증을 함께 보낸다 — Cookie: session_id=abc123</div>
+        <p>로그인 상태를 유지하려면 요청마다 쿠키(Cookie), 세션(Session), 또는 토큰(Token)을 헤더에 담아 함께 보내야 합니다. 신분증 카드를 목에 걸고 방문한 손님에게 직원이 &ldquo;아, 지민님!&rdquo; 하고 반기듯, 서버는 이 인증 정보를 보고 비로소 사용자를 알아봅니다.</p>
+      </div>
+      <p class="body">기억하지 못하는 것은 프로토콜의 결함이 아니라 설계입니다. 대신 기억이 필요한 순간에는, 편지 봉투에 신분증을 끼워 보내는 방식으로 상태를 이어 갑니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>편지 봉투의 표시: 주요 헤더 비교표</h3></div>
+      <p class="key-msg">헤더는 편지 봉투 겉면에 적는 표시다. 봉투 안 내용물이 무엇인지, 누가 보냈는지, 얼마나 오래 보관할지를 알려준다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>헤더는 본문(Body)이 아니라 본문을 설명하는 부가 정보</caption>
+          <thead>
+            <tr>
+              <th>헤더</th>
+              <th class="fe-th">봉투 위의 비유</th>
+              <th class="be-th">실제 역할</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">Content-Type</td><td>내용물의 종류표 (소포 상자 스티커)</td><td>본문이 JSON인지 HTML인지 이미지인지 알림</td></tr>
+            <tr><td class="axis">Authorization</td><td>발신자 신원 증명 (신분증 스티커)</td><td>요청을 보낸 사람의 신원을 증명</td></tr>
+            <tr><td class="axis">Cache-Control</td><td>얼마나 보관할지 지시 (모래시계 스티커)</td><td>응답을 얼마나 오래 저장해도 되는지 지시</td></tr>
+            <tr><td class="axis">Content-Length</td><td>내용물 무게 표시 (저울 스티커)</td><td>본문의 크기를 바이트 단위로 표시</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">헤더는 요청과 응답 모두에 붙는 부가 정보로, 본문의 내용을 설명하거나 처리 방식을 지시합니다. <code>Content-Type</code>은 본문이 JSON인지 HTML인지 이미지인지를 알려주고, <code>Authorization</code>은 요청을 보낸 사람의 신원을 증명하며, <code>Cache-Control</code>은 이 응답을 얼마나 오래 저장해도 되는지를 지시합니다. 헤더를 정확히 이해하면 요청과 응답을 훨씬 세밀하게 제어할 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>언제 어떤 편지를 쓸까: GET vs POST와 멱등성</h3></div>
+      <p class="key-msg">같은 편지를 열 번 보내도 결과가 똑같아야 하는 안전한 편지(GET)와, 보낼 때마다 새로운 일이 벌어지는 편지(POST)는 구분해서 써야 한다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>📮 <span class="fe-t">GET 편지함</span> &mdash; 조회할 때, 검색할 때</h4>
+          <ul>
+            <li>같은 편지를 열 번 넣어도 서가엔 책 한 권 그대로</li>
+            <li>멱등(idempotent): 몇 번을 보내도 결과는 같다</li>
+            <li>조회 전용, 반복해도 안전</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>📮 <span class="be-t">POST 편지함</span> &mdash; 새 글을 쓸 때, 결제를 요청할 때</h4>
+          <ul>
+            <li>같은 편지를 열 번 넣으면 상자가 열 개 쌓인다</li>
+            <li>비멱등: 보낼 때마다 새로운 일이 생긴다</li>
+            <li>상태 변경, 반복하면 위험 (예: 중복 주문)</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body"><code>GET</code>은 서버의 데이터를 조회만 하고 변경하지 않으므로, 같은 요청을 여러 번 반복해도 결과가 동일한 멱등성(idempotency)을 가집니다. 반면 <code>POST</code>는 새로운 데이터를 생성하는 등 서버 상태를 변경하므로, 같은 요청을 반복하면 매번 새로운 결과 — 예를 들어 중복 주문 — 가 발생할 수 있습니다. 그래서 단순 조회에는 GET을, 생성이나 결제처럼 상태를 바꾸는 동작에는 POST를 사용하는 것이 설계 원칙입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>개발자도구로 훔쳐보는 편지함, 그리고 정리</h3></div>
+      <p class="key-msg">개발자 도구의 Network 탭을 열면, 지금까지 배운 요청과 응답의 모든 편지 왕래를 실시간으로 훔쳐볼 수 있다.</p>
+      <p class="body">개발자 도구의 <code>Network</code> 탭을 열면 브라우저가 실제로 주고받은 모든 요청과 응답을 눈으로 확인할 수 있습니다. 어떤 메서드로, 어떤 상태 코드로, 어떤 헤더와 본문을 담아 편지가 오갔는지가 전부 기록되어 있습니다. 결국 웹은 이 여섯 가지 원리 — 요청과 응답의 구조, 무상태성, 메서드, 상태 코드, 헤더, 그리고 로그인 유지 방법 — 위에서 돌아갑니다.</p>
+      <div class="chips">
+        <span class="chip">요청 = Method+URL+Headers+Body</span>
+        <span class="chip">응답 = Status+Headers+Body</span>
+        <span class="chip">HTTP는 무상태(stateless)</span>
+        <span class="chip">메서드 = GET/POST/PUT/DELETE</span>
+        <span class="chip">상태 코드 = 2xx/3xx/4xx/5xx</span>
+        <span class="chip">로그인 유지 = 쿠키/세션/토큰</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">한 통의 편지, 한 통의 답장</div>
+    <p>주소창의 엔터 한 번은 청록색 요청 편지 한 통이 되어 우체국으로 떠나고, 서버는 상태 코드와 헤더, 본문을 담은 보라색 답장으로 응답합니다.<br>주소를 찾고, 길을 뚫고, 편지가 오가는 이 왕복 여정 위에서 — 우리가 보는 모든 웹 화면이 완성됩니다.</p>
+    <span class="sig">GET / HTTP 1.1 — request sent, response received</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

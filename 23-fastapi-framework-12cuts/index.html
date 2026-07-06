@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FastAPI — 타입 힌트 하나로 검증과 문서화를 동시에 얻는 법 | 12컷 이미지 스토리</title>
+<meta name="description" content="안내판까지 스스로 그려 붙이는 접수창구에 비유해, FastAPI의 타입 힌트 자동 검증과 자동 문서화를 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #2dd4bf;
+    --be: #a9afb9;
+    --fe-deep: #00897b;
+    --be-deep: #6b7280;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(45,212,191,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(45,212,191,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(0,137,123,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (컷 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #00695c, #00b8a3); }
+  .quote-card .half.fe-h2 { background: linear-gradient(135deg, #0d4f47, #009688); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (컷 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(0,150,136,0.12); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(107,114,128,0.14); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (컷 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #66d9c8; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (컷 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (컷 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(0,150,136,0.18); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(107,114,128,0.2); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 디버깅 가이드 (컷 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (컷 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 백엔드 프레임워크 · 12컷 이미지 스토리 #23</div>
+    <h1>FastAPI,<br>타입 힌트 하나로 검증과 문서화를 동시에 얻는 법</h1>
+    <p class="subtitle">요청 규칙만 정하면 안내판까지 스스로 그려 붙이는 &lsquo;접수창구&rsquo;에 비유해, 파이썬 타입 힌트가 만들어내는 자동화를 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">FastAPI</span><span class="vs">vs</span><span class="be">Flask</span></div>
+  </header>
+
+  <section class="intro">
+    <p>API 서버를 만들 때 우리는 늘 두 가지 일을 따로 해왔습니다. 요청을 처리하는 코드를 짜는 일, 그리고 그 API를 어떻게 쓰면 되는지 설명하는 문서를 쓰는 일. <strong class="fe-t">FastAPI</strong>는 이 둘을 하나로 묶어버립니다. 함수 파라미터에 파이썬 타입 힌트를 붙이는 순간, 값 검증과 API 문서가 동시에 만들어지기 때문입니다. 손님의 요청 규칙(라우트)을 정하는 순간 그 규칙을 쓰는 방법을 설명하는 안내판까지 스르륵 인쇄해 붙여주는 접수창구 하나를 떠올리며, FastAPI가 어떻게 이런 자동화를 만들어내는지 12컷으로 살펴봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 정의와 비교 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 요청 규칙을 정하면 안내판이 저절로 인쇄되는 접수창구, 타입 힌트로 검증과 문서화를 동시에 얻는다는 정의, FastAPI와 Flask 창구의 자동화 비교, 한 문장으로 정리한 정의 카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>이 창구는 왜 요청만 해도 안내판까지 생길까</h3></div>
+      <p class="key-msg">FastAPI는 요청 처리 규칙만 정하면, 그 규칙을 쓰는 방법을 설명하는 안내판까지 스스로 만들어주는 프레임워크다.</p>
+      <p class="body">파이썬으로 API 서버, 즉 다른 프로그램이나 화면이 데이터를 요청하고 받아가는 창구를 만든다고 상상해 보세요. 틸/그린 간판이 붙은 작은 접수창구, 번호표 발권기 앞에 앉은 직원, 그리고 그 옆 벽에 스르륵 인쇄되어 나타나는 안내판. 창구의 규칙을 정하는 순간 그 규칙을 사용하는 방법을 설명하는 안내판까지 동시에 완성되는 이 장면이, 이 시리즈가 다루는 FastAPI의 정체입니다. <code>FastAPI — build APIs fast</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: 규칙판 하나면 나머지는 창구가 알아서</h3></div>
+      <p class="key-msg">FastAPI는 파이썬 타입 힌트로 요청과 응답의 모양을 선언하면, 값을 자동으로 검증하고 API 문서까지 자동으로 생성해주는 파이썬 웹 프레임워크다.</p>
+      <p class="body">FastAPI는 함수의 파라미터에 파이썬 타입 힌트를 붙이는 것만으로 두 가지 일을 동시에 해줍니다. 들어온 값이 그 타입에 맞는지 자동으로 검사하고, 그 규칙을 근거로 API 문서를 자동으로 만들어줍니다. 창구 직원이 &ldquo;이 서류는 이름과 나이가 필요합니다&rdquo;라는 규칙판 하나만 벽에 붙이면, 손님용 안내판도 똑같은 내용으로 저절로 완성되는 것과 같습니다. 개발자는 규칙(타입)만 선언하면 되고, 검증과 문서화라는 반복 작업은 FastAPI가 대신 처리합니다. <code>type hints -&gt; validation + docs</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 자동으로 붙는 안내판, 손으로 써야 하는 안내판</h3></div>
+      <p class="key-msg">FastAPI는 타입 힌트만으로 자동 검증과 자동 문서화를 제공하지만, Flask는 더 자유로운 대신 검증과 문서화를 대부분 직접 챙겨야 한다.</p>
+      <p class="body">왼쪽 틸/그린 창구에는 로봇 팔이 방금 인쇄된 안내판을 척척 벽에 붙이고 있고, 오른쪽 회색 창구에서는 직원이 펜을 눌러가며 안내판 문구를 직접 써 내려갑니다. <span class="fe-t">FastAPI</span>는 파이썬 타입 힌트를 선언하는 것만으로 요청 값 검증과 API 문서 생성을 자동으로 처리해주는, 자동화에 무게를 둔 프레임워크입니다. <span class="be-t">Flask</span>는 더 오래되고 더 자유로운 프레임워크로, 원하는 대로 구조를 짤 수 있는 대신 값 검증이나 문서화 기능을 직접 라이브러리를 추가하고 설정해야 하는 경우가 많습니다. 둘 다 파이썬으로 API 서버를 만드는 도구지만, 자동화 정도라는 저울 위에서 서 있는 위치가 다릅니다. <code>type hints -&gt; auto validation + auto docs</code> / <code>more freedom, manual setup</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>한 문장으로 정리하면</h3></div>
+      <p class="key-msg">이 한 문장만 기억해도 FastAPI가 다른 프레임워크와 무엇이 다른지 설명할 수 있다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">YOU WRITE</div>
+            <div class="what">타입 힌트를<br>규칙으로 선언한다</div>
+          </div>
+          <div class="half fe-h2">
+            <div class="who">FASTAPI GIVES</div>
+            <div class="what">자동 검증과<br>자동 문서화를 돌려준다</div>
+          </div>
+        </div>
+        <div class="tag">definition</div>
+      </div>
+      <p class="body">FastAPI는 파이썬 타입 힌트를 규칙으로 삼아, 들어오는 데이터를 자동으로 검증하고 그 규칙 그대로 API 문서를 자동 생성해주는 현대적이고 빠른 웹 프레임워크입니다. 타입을 쓰면 검증과 문서화가 따라온다는 것, 그것이 FastAPI의 핵심입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 생태계와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: Pydantic·Uvicorn·Swagger UI 등 창구를 움직이는 다섯 가지 생태계 도구, 요청 한 장이 안내판까지 만들어내는 순환 다이어그램, 자동 검증과 비즈니스 규칙 사이의 흐릿한 경계, 라우트 정의와 실행 코드 비교">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>생태계 카탈로그: 창구를 움직이는 다섯 가지 도구</h3></div>
+      <p class="key-msg">FastAPI 창구는 혼자 움직이지 않는다. 검증, 실행, 문서화, 구분, 동시 처리를 각각 맡은 다섯 도구가 함께 움직인다.</p>
+      <p class="body"><code>Pydantic</code>은 들어온 데이터가 정해진 모양(타입)과 맞는지 검사해주는 도구로, FastAPI의 자동 검증은 사실 Pydantic이 담당합니다. <code>Uvicorn</code>은 우리가 작성한 FastAPI 코드를 실제로 인터넷에서 응답할 수 있는 서버로 켜주는 실행기입니다. <code>/docs</code> 주소에서 볼 수 있는 <code>Swagger UI</code>는 우리가 정의한 라우트를 바탕으로 자동 생성되는 안내판이고, path parameter(주소 경로에 담긴 값)와 query parameter(주소 뒤 <code>?</code>에 붙는 값)는 손님이 어떤 요청인지 구분하는 방법입니다. <code>async def</code>는 하나의 요청이 데이터베이스나 외부 응답을 기다리는 동안 다른 요청도 함께 처리할 수 있게 해주는, 창구 직원의 멀티태스킹 능력입니다. 이 다섯이 모여야 비로소 창구 하나가 완성됩니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 요청 한 장이 안내판까지 만들어내는 흐름</h3></div>
+      <div class="flow">
+        <span class="node n-user">사용자 요청</span><span class="arrow">→</span>
+        <span class="node n-fe">라우트 매칭</span><span class="arrow">→</span>
+        <span class="node n-api">값 검증(Pydantic)</span><span class="arrow">→</span>
+        <span class="node n-be">함수 실행</span><span class="arrow">→</span>
+        <span class="node n-api">JSON 응답</span><span class="arrow">→</span>
+        <span class="node n-fe">/docs 자동 갱신</span>
+      </div>
+      <p class="body">손님(클라이언트)이 특정 주소로 요청을 보내면, FastAPI는 먼저 그 주소와 일치하는 라우트(창구 규칙)를 찾습니다. 그다음 함수에 선언된 타입 힌트를 기준으로 Pydantic이 값을 검증하고, 형식이 맞지 않으면 곧바로 오류를 돌려줍니다. 값이 맞으면 우리가 작성한 함수가 실행되어 결과를 JSON 형태로 응답하고, 이 모든 규칙 정의는 동시에 <code>/docs</code> 안내판에도 자동으로 반영됩니다. 하나의 요청을 처리하는 이 흐름 자체가 안내판을 최신 상태로 유지하는 과정이기도 합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 자동으로 챙겨주는 것과 직접 챙겨야 하는 것</h3></div>
+      <p class="key-msg">형식이 맞는지는 자동으로 검사해도, &ldquo;이 값이 실제로 말이 되는지&rdquo;의 비즈니스 규칙은 여전히 개발자가 직접 검증해야 한다.</p>
+      <p class="body">창구 카운터를 가로지르는 반투명한 경계선을 상상해 보세요. 경계선 왼쪽에서는 도장 찍는 검수 담당자가 서류의 형식 — 글자 수, 숫자 여부, 필수 항목 — 만 확인합니다. FastAPI(정확히는 그 안의 Pydantic)가 자동으로 확인해주는 영역입니다. 경계선 오른쪽에서는 안경을 쓴 다른 직원이 &ldquo;이미 사용 중인 이메일인지&rdquo;, &ldquo;재고가 남아있는지&rdquo; 같은 서류의 실제 의미를 다시 읽습니다. 이건 타입 힌트만으로는 확인할 수 없고, 함수 안에서 개발자가 직접 로직을 작성해 검사해야 하는 영역입니다. FastAPI가 챙겨주는 자동 검증을 과신해서 이 경계를 잊으면, 형식은 멀쩡한데 실제로는 말이 안 되는 데이터가 그대로 통과할 수 있습니다. <code>type check != business rule</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 접수창구: 규칙판을 실제로 세워보기</h3></div>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">FastAPI — 창구 규칙판 세우기</div>
+          <pre><span class="cm"># 규칙판을 세운다</span>
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+app = FastAPI()
+
+<span class="kw">@app</span>.get(<span class="st">"/items/{item_id}"</span>)
+<span class="kw">def</span> read_item(item_id: <span class="kw">int</span>, q: <span class="kw">str</span> | <span class="kw">None</span> = <span class="kw">None</span>):
+    <span class="kw">return</span> {<span class="st">"item_id"</span>: item_id, <span class="st">"q"</span>: q}</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">요청 모델 + 창구 켜기</div>
+          <pre><span class="cm"># 요청 본문의 모양을 선언한다</span>
+<span class="kw">class</span> Order(BaseModel):
+    name: <span class="kw">str</span>
+    price: <span class="kw">float</span>
+
+<span class="cm"># 터미널에서 창구를 실제로 켠다</span>
+<span class="cm"># uvicorn main:app --reload</span></pre>
+        </div>
+      </div>
+      <p class="body"><code>@app.get("/items/{item_id}")</code>처럼 경로와 함께 함수를 선언하고, 파라미터에 <code>item_id: int</code> 같은 타입 힌트를 붙이면 그것만으로 주소에 담긴 값이 자동으로 정수로 변환되고 검증됩니다. 요청 본문처럼 더 복잡한 데이터는 Pydantic의 <code>BaseModel</code>을 상속한 클래스로 모양을 선언해두면, FastAPI가 그 모양대로 값을 검사해줍니다. 이렇게 작성한 코드를 <code>uvicorn main:app --reload</code> 명령으로 실행하면 실제로 작동하는 API 서버와 그 서버의 안내판(<code>/docs</code>)이 동시에 생겨납니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 타입 힌트를 빠뜨린 흔한 실수, FastAPI가 얻는 것과 치르는 대가를 정리한 트레이드오프 표, 터미널과 /docs 안내판에서 실전 확인하는 절차, 타입을 적었는가로 가늠하는 판별법과 핵심 요약">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 규칙판에 규칙을 안 적어두는 것</h3></div>
+      <div class="warn-box">
+        <div class="warn-label">⚠ no type hint = no auto validation, no docs</div>
+        <p>함수 파라미터에 <code>item_id: int</code>처럼 타입을 적지 않고 그냥 <code>item_id</code>라고만 쓰면, FastAPI는 그 값이 무엇인지 알 수 없어 자동 검증도 자동 문서화도 제대로 이루어지지 않습니다. 안내판도 &ldquo;아무 값이나 가능&rdquo;이라는 흐릿한 문구만 남을 뿐입니다.</p>
+        <div class="ok-label">✓ always annotate parameters with types</div>
+        <p>타입 힌트는 단순한 주석이 아니라 FastAPI가 규칙을 읽어내는 유일한 근거이므로, 반드시 명시해주는 습관이 필요합니다.</p>
+      </div>
+      <p class="body">또한 <code>def</code>와 <code>async def</code>를 특별한 이유 없이 뒤섞어 쓰면, 시간이 걸리는 작업(외부 API 호출, DB 조회 등)을 처리할 때 창구 전체가 불필요하게 오래 기다리게 되는 경우가 생길 수 있습니다. 창구 두 개가 나란히 있는데 직원이 순서를 헷갈려 손님 줄이 뒤엉키는 모습과 같습니다. 각각의 쓰임을 이해하고 일관되게 사용하는 것이 좋습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 빠른 창구의 대가</h3></div>
+      <p class="key-msg">FastAPI는 빠른 개발 속도와 자동 문서화·검증이라는 강점을 주지만, 그 대가로 파이썬 생태계 안에서만 쓸 수 있다는 제약을 갖는다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>fast to build, python-only</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="fe-th">얻는 것</th>
+              <th class="be-th">치르는 것</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">개발 속도</td><td>타입만 선언하면 검증·문서화가 즉시 따라옴</td><td>파이썬 타입 힌트 문법을 익혀야 함</td></tr>
+            <tr><td class="axis">문서화</td><td>&lsquo;/docs&rsquo; 안내판이 자동으로 인쇄됨</td><td>문서가 코드와 항상 정확히 일치해야 함</td></tr>
+            <tr><td class="axis">검증</td><td>Pydantic이 값 형식을 자동 확인</td><td>타입 힌트를 꼼꼼히 써야 하는 수고</td></tr>
+            <tr><td class="axis">실행 환경</td><td>파이썬 생태계 안에서 빠르게 통합</td><td>다른 언어 생태계와는 직접 연결 어려움</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">FastAPI는 타입 힌트만 선언해도 검증과 문서화가 자동으로 따라오기 때문에, API 서버를 매우 빠르게 만들고 다른 팀과의 협업(문서 공유)도 수월해집니다. 다만 이런 자동화는 파이썬 문법과 타입 힌트 작성 습관을 어느 정도 익혀야 제대로 누릴 수 있고, FastAPI 자체가 파이썬 생태계 안에서만 동작하므로 다른 언어로 짜인 시스템과 바로 통합하려면 별도의 연결 작업이 필요합니다. 빠른 개발 속도와 자동화라는 강점은, 파이썬이라는 하나의 생태계 안에 머무른다는 제약과 맞바꾼 결과입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>실전 팁: 안내판에서 직접 눌러보며 확인하기</h3></div>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🖥 터미널에서 창구 켜기</h4>
+          <ul>
+            <li>uvicorn main:app --reload 실행</li>
+            <li>정상 기동 로그 확인</li>
+            <li>코드 저장 시 자동 재시작(reload) 확인</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>📋 /docs 안내판에서 바로 테스트</h4>
+          <ul>
+            <li>브라우저에서 /docs 접속</li>
+            <li>Try it out 클릭 후 값 입력</li>
+            <li>Execute 눌러 200 OK 응답 확인</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">FastAPI 서버를 <code>uvicorn main:app --reload</code>로 실행한 뒤 브라우저에서 <code>/docs</code> 주소로 들어가면, 별도의 도구 없이도 지금까지 정의한 모든 API 항목을 눈으로 보고 바로 테스트해볼 수 있는 안내판이 열립니다. 각 항목의 &lsquo;Try it out&rsquo; 버튼을 누르고 값을 입력한 뒤 &lsquo;Execute&rsquo;를 누르면, 실제 서버에 요청이 전송되고 그 응답을 그 자리에서 확인할 수 있어 Postman 같은 별도 프로그램 없이도 빠르게 디버깅할 수 있습니다. 코드를 고치고 새로고침만 하면 되는 매우 짧은 개발 확인 주기를 만들어줍니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>판별법과 핵심 요약: 타입을 적었는가</h3></div>
+      <p class="key-msg">함수에 타입 힌트를 적었는가, 그것이 FastAPI를 제대로 쓰고 있는지 가늠하는 가장 간단한 판별법이다.</p>
+      <p class="body">FastAPI를 제대로 쓰고 있는지 가늠하는 가장 간단한 판별법은 &lsquo;함수 파라미터마다 타입 힌트를 적었는가&rsquo;입니다. 타입을 적으면 그 즉시 값 검증과 API 문서 생성이라는 두 가지 혜택이 자동으로 따라오고, 적지 않으면 그 혜택을 스스로 포기하는 셈이 됩니다. 접수창구가 규칙판 하나만 붙이면 안내판까지 저절로 완성되듯, FastAPI는 개발자가 선언한 타입이라는 규칙을 근거로 검증과 문서화, 그리고 빠른 개발이라는 세 가지를 동시에 선물합니다.</p>
+      <div class="chips">
+        <span class="chip">타입 힌트가 곧 규칙이다</span>
+        <span class="chip">Pydantic이 값을 검증한다</span>
+        <span class="chip">/docs가 안내판이다</span>
+        <span class="chip">async def는 기다림을 나눠 쓴다</span>
+        <span class="chip">Flask보다 자동화에 무게</span>
+        <span class="chip">판별법: 타입을 적었는가</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">하나의 접수창구, 두 가지 선물</div>
+    <p>타입 힌트라는 규칙판 하나를 세우면, FastAPI는 그 규칙대로 값을 검증하고 그 규칙대로 안내판(문서)까지 그려 붙여줍니다.<br>손님이 요청하는 방식은 하나지만, 창구가 돌려주는 선물은 검증과 문서화, 두 가지입니다.</p>
+    <span class="sig">FastAPI, understood</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

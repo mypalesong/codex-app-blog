@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REST API 설계 — 자원을 다루는 약속 | 12컷 이미지 스토리</title>
+<meta name="description" content="도서관 사서에 비유해, 서버의 자원을 어떤 이름(URI)으로 부르고 어떤 동작(HTTP 메서드)으로 다룰지 약속하는 REST API 설계를 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #8f8af8;
+    --be: #fb7185;
+    --fe-deep: #4f46e5;
+    --be-deep: #d9445f;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(143,138,248,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(143,138,248,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(79,70,229,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #3b34c4, #6a63f2); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #c02a4d, #f9718c); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(143,138,248,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(251,113,133,0.1); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #a5a0ff; }
+  .code-card pre .st { color: #f8a0af; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 05 · 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(79,70,229,0.18); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(251,113,133,0.14); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff td code { font-family: var(--code); font-size: 0.84em; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 선택 가이드 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--code);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 백엔드 API 설계 · 12컷 이미지 스토리 #03</div>
+    <h1>REST API 설계,<br>자원을 다루는 약속</h1>
+    <p class="subtitle">거대한 도서관의 &lsquo;서가&rsquo;와 &lsquo;사서&rsquo;에 비유해, 자원을 이름 짓고 다루는 약속을 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">URI = 명사</span><span class="vs">+</span><span class="be">Method = 동사</span></div>
+  </header>
+
+  <section class="intro">
+    <p>웹 서버는 거대한 도서관과 같습니다. 끝없이 뻗은 서가에는 사용자, 게시글, 주문 내역 같은 <strong class="fe-t">자원(resource)</strong>이 책처럼 꽂혀 있고, 방문자는 카운터의 사서에게 쪽지를 내밀며 묻습니다. &ldquo;이 자원을 어떻게 부르고, 무엇을 해달라고 요청해야 하나요?&rdquo; 이 질문에 대한 약속의 이름이 바로 REST입니다. 이 글에서는 자원을 가리키는 이름인 <strong class="fe-t">URI</strong>와 그 자원에 가하는 <strong class="be-t">행동(HTTP 메서드)</strong>이 어떻게 역할을 나누는지, 도서관 사서의 하루에 비유해 하나씩 살펴봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 약속의 발견 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 거대한 서가 앞의 사서와 방문자, URI는 위치·메서드는 행동이라는 REST의 정의, 좋은 URI와 나쁜 URI의 나란한 비교, 명사는 URI·동사는 메서드라는 핵심 원칙 인용카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>거대한 서가 앞에서</h3></div>
+      <p class="key-msg">웹 서버는 거대한 도서관과 같다. REST는 &ldquo;이 책을 어떻게 부르고, 무엇을 해달라고 할 것인가&rdquo;에 대한 약속의 이름이다.</p>
+      <p class="body">소실점 너머로 끝없이 뻗은 서가, 책등마다 새겨진 짧은 URI 라벨, 카운터에 차분히 선 사서. 그리고 물음표가 적힌 쪽지를 든 방문자. 웹 서버가 다루는 모든 것 &mdash; 사용자, 게시글, 주문 내역 &mdash; 은 결국 <span class="fe-t">자원(resource)</span>입니다. REST API 설계란 이 자원들을 어떤 이름(<span class="fe-t">URI</span>)으로 부르고, 어떤 동작(<span class="be-t">HTTP 메서드</span>)으로 다룰지에 대한 약속을 정하는 일입니다. 사서의 손끝에서 뻗어 나간 광선이 서가의 한 책을 정확히 가리키듯, 좋은 약속은 요청을 정확한 자원으로 데려다줍니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: REST란 무엇인가</h3></div>
+      <p class="key-msg">REST는 자원을 URI로 표현하고, 그 자원에 대한 행동을 HTTP 메서드로 표현하는 설계 스타일이다.</p>
+      <p class="body"><span class="fe-t">REST</span>(Representational State Transfer)는 자원(resource)을 <span class="fe-t">URI</span>라는 고유한 이름으로 식별하고, 그 자원에 대해 무엇을 할지는 <span class="be-t">HTTP 메서드</span>(GET, POST, PUT, DELETE 등)로 표현하는 설계 원칙입니다. 펼쳐진 책의 왼쪽 페이지가 서가 위치를 가리키는 태그 &mdash; &ldquo;URI = 위치(명사)&rdquo; &mdash; 라면, 오른쪽 페이지는 사서의 손동작 &mdash; &ldquo;메서드 = 행동(동사)&rdquo; &mdash; 입니다. 즉 URI는 &ldquo;무엇을&rdquo;에 해당하는 명사이고, 메서드는 &ldquo;어떻게 할지&rdquo;에 해당하는 동사 역할을 맡습니다. 이 역할 분담이 REST의 핵심입니다. <code>Representational State Transfer</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 좋은 URI vs 나쁜 URI</h3></div>
+      <p class="key-msg">좋은 URI는 자원의 위치만 가리키고, 나쁜 URI는 행동까지 이름에 욱여넣는다.</p>
+      <p class="body">정돈된 서가와 어질러진 서가를 나란히 놓고 보면 차이가 선명해집니다. <code>/users/123/orders</code>는 &ldquo;123번 사용자의 주문들&rdquo;이라는 자원의 위치만 나타내는 <span class="fe-t">명사형 URI</span>로, 책이 자원별로 깔끔히 분류되어 꽂혀 있는 좋은 설계입니다. 반면 <code>/getUserOrderById?id=123</code>은 URI 안에 &ldquo;가져오다(get)&rdquo;라는 <span class="be-t">행동</span>까지 집어넣어 메서드와 역할이 중복됩니다 &mdash; 책등마다 동사 스티커가 덕지덕지 붙은 서가와 같습니다. 좋은 REST 설계는 URI에서 동사를 걷어내고, 그 역할을 HTTP 메서드에 온전히 맡깁니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>핵심 원칙 인용카드</h3></div>
+      <p class="key-msg">URI는 명사(자원)여야 하고, 동사(행동)는 HTTP 메서드가 담당한다는 것이 REST 설계의 제1원칙이다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">RESOURCE &mdash; URI</div>
+            <div class="what">명사로 자원의<br>이름과 계층을 담는다</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">ACTION &mdash; METHOD</div>
+            <div class="what">동사는 HTTP 메서드가<br>온전히 담당한다</div>
+          </div>
+        </div>
+        <div class="tag">the first principle of REST design</div>
+      </div>
+      <p class="body">&ldquo;URI는 명사여야 하고, 동사는 HTTP 메서드가 담당한다.&rdquo; REST 설계에서 가장 자주 인용되는 원칙입니다. URI에는 <code>/users</code>, <code>/orders/123</code>처럼 자원의 이름과 계층만 담고, 생성이나 조회, 삭제 같은 행동은 GET, POST, PUT, DELETE 같은 메서드로 표현합니다. 이 원칙을 지키면 URI만 보고도 어떤 자원을 다루는지 예측할 수 있습니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 메서드와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: GET·POST·PUT·PATCH·DELETE를 도서관 행동에 대응시킨 CRUD 카탈로그, 요청과 응답이 오가는 순환 다이어그램, REST·RPC·GraphQL 세 코너의 경계 비교, 라우트 정의와 JSON 응답 코드 예시">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>CRUD 매핑 카탈로그: 열람 · 등록 · 정정 · 폐기</h3></div>
+      <p class="key-msg">GET, POST, PUT/PATCH, DELETE는 각각 도서관의 열람, 등록, 정정, 폐기라는 행동에 대응한다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>CRUD &times; HTTP method mapping</caption>
+          <thead>
+            <tr>
+              <th class="be-th">메서드</th>
+              <th>도서관의 행동</th>
+              <th class="fe-th">예시 URI</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">GET</td><td>열람(조회) &mdash; 돋보기로 책을 살펴본다</td><td><code>GET /books/42</code></td></tr>
+            <tr><td class="axis">POST</td><td>등록(생성) &mdash; 새 책을 서가에 꽂는다</td><td><code>POST /books</code></td></tr>
+            <tr><td class="axis">PUT</td><td>전체 정정(치환) &mdash; 표지째 다시 발행한다</td><td><code>PUT /books/42</code></td></tr>
+            <tr><td class="axis">PATCH</td><td>부분 정정 &mdash; 한 페이지만 수정펜으로 고친다</td><td><code>PATCH /books/42</code></td></tr>
+            <tr><td class="axis">DELETE</td><td>폐기(삭제) &mdash; 책을 파쇄함에 넣는다</td><td><code>DELETE /books/42</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">REST에서 자원을 다루는 행동은 대개 CRUD(Create, Read, Update, Delete)로 정리됩니다. GET은 조회, POST는 새 자원 생성, PUT은 자원 전체를 치환하는 수정, PATCH는 자원의 일부만 바꾸는 수정, DELETE는 삭제를 의미합니다. 도서관 대출 창구에 늘어선 다섯 개의 타일처럼, 각각 열람, 신규 등록, 표지 전체 재발행, 페이지 일부 정정, 폐기에 해당합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 요청과 응답의 순환</h3></div>
+      <p class="key-msg">클라이언트가 자원 URI와 메서드로 요청을 보내면, 서버는 상태 코드와 표현(JSON)으로 응답한다. 이 왕복이 REST 통신의 기본 순환이다.</p>
+      <div class="flow">
+        <span class="node n-user">방문자(클라이언트)</span><span class="arrow">→</span>
+        <span class="node n-fe">GET /books/42</span><span class="arrow">→</span>
+        <span class="node n-be">사서(서버) 처리</span><span class="arrow">→</span>
+        <span class="node n-api">200 OK</span><span class="arrow">→</span>
+        <span class="node n-api">JSON 표현</span><span class="arrow">→</span>
+        <span class="node n-user">화면 갱신</span>
+      </div>
+      <p class="body">REST 통신의 기본 단위는 요청과 응답의 한 번의 왕복입니다. 방문자가 <code>GET /books/42</code>라고 적힌 쪽지를 내밀면, 사서는 해당 책을 스캔해 확인하고 &ldquo;200 OK&rdquo; 태그와 함께 책의 <span class="fe-t">표현(representation)</span> &mdash; 주로 JSON &mdash; 을 돌려줍니다. 여기서 중요한 특징이 하나 더 있습니다. 각 요청은 이전 요청의 맥락을 서버가 기억하지 않는 <span class="be-t">무상태(stateless)</span> 방식으로 처리됩니다. 사서는 매번 쪽지에 적힌 내용만 보고 일하며, 이 순환은 요청마다 처음부터 반복됩니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: REST vs RPC vs GraphQL</h3></div>
+      <p class="key-msg">모든 JSON API가 REST는 아니다. RPC는 동사 중심 호출이고, GraphQL은 클라이언트가 필요한 데이터 모양을 직접 지정하는 질의 방식이다.</p>
+      <p class="body">도서관에 세 개의 코너가 있다고 상상해 보세요. <span class="fe-t">REST</span> 코너에는 명사형 URI 라벨이 붙은 책들이 정돈되어 꽂혀 있습니다. <span class="be-t">RPC</span>(Remote Procedure Call) 코너의 방문자는 사서에게 <code>doSomething()</code>이라고 적힌 쪽지를 건넵니다 &mdash; <code>/doSomething</code> 같은 동사형 엔드포인트로 특정 함수를 원격 실행하는 데 초점을 두는 방식입니다. <span class="be-t">GraphQL</span> 코너의 방문자는 원하는 항목만 체크한 체크리스트를 제출해 정확히 그 모양의 데이터를 받습니다. JSON을 주고받는다고 해서 모두 REST인 것은 아닙니다. REST는 자원과 표준 메서드라는 제약을 지키는 스타일이고, RPC와 GraphQL은 이와 다른 철학을 가진 별개의 설계 방식입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 예시: 사서의 업무 수첩</h3></div>
+      <p class="key-msg">실제 REST 엔드포인트는 라우트 정의와 JSON 응답 형태로 구체화된다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">라우트 정의 &mdash; 서가 위치와 행동의 짝</div>
+          <pre><span class="cm">// id는 서가 위치, body는 새 책 정보</span>
+app.get(<span class="st">'/books/:id'</span>, getBook);     <span class="cm">// 열람</span>
+app.post(<span class="st">'/books'</span>, createBook);     <span class="cm">// 등록</span>
+app.delete(<span class="st">'/books/:id'</span>, dropBook); <span class="cm">// 폐기</span></pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">JSON 응답 &mdash; 201 Created</div>
+          <pre><span class="cm">// POST /books 성공 응답</span>
+<span class="kw">HTTP/1.1</span> <span class="st">201 Created</span>
+{
+  <span class="st">"id"</span>: 43,
+  <span class="st">"title"</span>: <span class="st">"REST in Practice"</span>,
+  <span class="st">"shelf"</span>: <span class="st">"/books/43"</span>
+}</pre>
+        </div>
+      </div>
+      <p class="body">실제로 REST API를 구현할 때는 <code>GET /books/:id</code>, <code>POST /books</code>, <code>DELETE /books/:id</code>처럼 자원 경로와 메서드를 짝지어 라우트를 정의합니다. 새 책을 등록하는 POST 요청이 성공하면 서버는 <code>201 Created</code> 상태 코드와 함께 생성된 자원의 JSON 표현을 응답 본문에 담아 돌려줍니다. 이렇게 라우트 정의와 응답 형식이 합쳐져 하나의 완결된 REST 엔드포인트가 됩니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 멱등성 무시·버저닝 부재·과도한 URI 중첩이라는 세 개의 경고 팻말, 페이지네이션·필터링·버저닝·에러 형식을 정리한 규정표, REST와 GraphQL 갈림길의 선택 가이드, URI만 보고 짐작 가능하면 좋은 설계라는 판별법과 핵심 요약">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수와 주의점: 서가 사이의 경고 팻말</h3></div>
+      <p class="key-msg">멱등성을 무시하거나, 버전 관리를 하지 않거나, URI를 과도하게 중첩하는 것은 REST 설계에서 자주 나오는 실수다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ 멱등성 무시 · 버저닝 부재 · 과도한 URI 중첩</div>
+        <p>DELETE나 PUT처럼 여러 번 반복 호출해도 결과가 같아야 하는 멱등성(idempotency)을 무시하면, 같은 요청이 두 번 들어갔을 때 예기치 못한 상태 변화가 생깁니다. 버전 관리 없이 새 규정집을 옛 규정집 위에 그냥 덮어쓰면 기존 클라이언트가 깨지고, <code>/users/1/posts/2/comments/3/likes</code>처럼 URI를 끝없이 깊게 중첩하면 가독성과 유지보수성이 무너집니다.</p>
+        <div class="ok-label">✓ 설계 초기에 반드시 점검할 것</div>
+        <p>멱등해야 할 메서드가 정말 멱등한지, API 버전 전략이 있는지, URI 계층이 두세 단계 안에서 끝나는지 &mdash; 이 세 가지는 서비스가 커지기 전, 설계 단계에서 미리 점검해야 할 항목입니다.</p>
+      </div>
+      <p class="body">같은 폐기 버튼을 여러 번 눌렀는데 책이 반복해서 사라지고, 규정집이 뒤섞이고, 서가 위치 라벨이 <code>/a/b/c/d/e/f</code>처럼 끝없이 길어진 도서관 &mdash; 이마를 짚은 사서의 난감한 표정이 이 세 가지 실수의 결과를 말해줍니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 미리 정해둘 네 가지</h3></div>
+      <p class="key-msg">페이지네이션, 필터링, 버저닝, 에러 형식은 REST API 설계에서 반드시 미리 정해두어야 할 네 가지 축이다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>decide these four before the API grows</caption>
+          <thead>
+            <tr>
+              <th class="fe-th">설계 축</th>
+              <th>도서관 비유</th>
+              <th class="be-th">대표적 접근 방식</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">페이지네이션</td><td>책을 여러 상자에 나눠 담는다</td><td><code>GET /books?page=2&amp;size=20</code></td></tr>
+            <tr><td class="axis">필터링</td><td>특정 장르 책만 체로 골라낸다</td><td><code>GET /books?genre=sf</code></td></tr>
+            <tr><td class="axis">버저닝</td><td>v1, v2 라벨이 붙은 규정집을 따로 둔다</td><td><code>/v1/books</code> &mdash; URI에 버전 포함</td></tr>
+            <tr><td class="axis">에러 형식</td><td>통일된 모양의 오류 안내 카드</td><td><code>{ "code", "message" }</code> 일관 규격</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">실전 REST API 설계에서는 목록이 많을 때 나눠 보여줄 페이지네이션 방식, 조건에 맞는 자원만 추릴 필터링 파라미터, API가 바뀔 때 기존 클라이언트를 보호할 버저닝 전략, 그리고 실패 시 일관된 형식으로 알려줄 에러 응답 규격을 미리 정해야 합니다. 이 네 축을 초기에 합의해두지 않으면 API가 커질수록 일관성이 무너지고 클라이언트 구현이 어려워집니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>언제 무엇을 쓰나: REST vs GraphQL 선택 가이드</h3></div>
+      <p class="key-msg">자원이 명확하고 단순한 CRUD 위주라면 REST가 알맞고, 클라이언트마다 필요한 데이터 모양이 크게 다르고 복잡하다면 GraphQL 같은 대안이 더 알맞을 수 있다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🧭 <span class="fe-t">REST를 고르는 경우</span> &mdash; 단순한 자원, 표준 CRUD</h4>
+          <ul>
+            <li>자원의 종류가 명확하다</li>
+            <li>표준적인 조회 · 생성 · 수정 · 삭제 위주다</li>
+            <li>HTTP 캐싱 등 인프라 이점을 그대로 누리고 싶다</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🧭 <span class="be-t">GraphQL을 고려하는 경우</span> &mdash; 복잡하고 다양한 데이터 요구</h4>
+          <ul>
+            <li>화면마다 필요한 데이터 모양이 크게 다르다</li>
+            <li>여러 자원을 한 번에 조합해야 한다</li>
+            <li>클라이언트가 필요한 필드를 직접 지정하고 싶다</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">갈림길에 세워진 두 개의 팻말을 떠올려 보세요. 왼쪽 길의 방문자는 정돈된 서가에서 곧장 원하는 책을 찾아가고, 오른쪽 길의 방문자는 여러 서가를 넘나들며 항목별로 골라 담습니다. 자원이 명확하고 CRUD 위주라면 REST가 구현도 간단하고 캐싱 등 HTTP 인프라의 이점도 그대로 누릴 수 있어 적합합니다. 복잡한 클라이언트 요구가 많다면 GraphQL이 더 효율적일 수 있습니다. 다만 두 접근 모두 결국 &ldquo;서버의 자원을 클라이언트에 전달한다&rdquo;는 같은 목적을 향합니다. 정답은 하나가 아니라 서비스의 특성에 달려 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>실전 판별법과 핵심 요약: 돋보기 속 URI</h3></div>
+      <p class="key-msg">URI만 보고도 그 API가 무엇을 하는지 짐작할 수 있다면 잘 설계된 REST API다.</p>
+      <p class="body">잘 설계된 REST API인지 판별하는 가장 실용적인 방법은 하나입니다. 돋보기 안에 비친 <code>/users/123/orders/456</code>처럼, URI만 보고도 그것이 어떤 자원을 다루는 요청인지 짐작할 수 있는가 &mdash; 짐작 가능하다면 좋은 설계입니다. URI는 명사로 <span class="fe-t">자원</span>을 가리키고, 메서드는 동사로 <span class="be-t">행동</span>을 표현하며, 서버는 상태 코드와 표현으로 응답하고, 각 요청은 무상태로 처리됩니다. 여기에 버저닝과 페이지네이션 같은 실전 규칙을 더하되, REST가 모든 상황의 정답은 아니라는 점도 함께 기억하세요.</p>
+      <div class="chips">
+        <span class="chip">URI는 명사</span>
+        <span class="chip">메서드는 동사</span>
+        <span class="chip">상태코드로 응답</span>
+        <span class="chip">무상태 통신</span>
+        <span class="chip">버저닝과 페이지네이션</span>
+        <span class="chip">REST만이 답은 아님</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">하나의 도서관, 하나의 약속</div>
+    <p>자원은 책이고, URI는 그 책이 꽂힌 서가의 위치이며, HTTP 메서드는 사서에게 요청하는 행동입니다.<br>명사는 URI에, 동사는 메서드에 &mdash; 이 단순한 역할 분담 하나가 URI만 보고도 짐작할 수 있는, 예측 가능한 API를 만듭니다.</p>
+    <span class="sig">nouns in the URI, verbs in the method</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

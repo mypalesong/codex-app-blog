@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>캐싱 전략 — 매번 다시 계산하지 않는 지혜 | 12컷 이미지 스토리</title>
+<meta name="description" content="냉장고와 밑반찬 통에 비유해, 캐시 히트와 캐시 미스, TTL과 캐시 무효화까지 캐싱 전략을 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #22c55e;
+    --be: #fbbf24;
+    --fe-deep: #15803d;
+    --be-deep: #f59e0b;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(34,197,94,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,197,94,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(21,128,61,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의/거래 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #14532d, #22c55e); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #92400e, #f59e0b); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(34,197,94,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(245,158,11,0.1); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .warn-label.second { margin-top: 16px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(34,197,94,0.16); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(245,158,11,0.14); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 실전 체크리스트 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 성능/백엔드 · 12컷 이미지 스토리 #12</div>
+    <h1>캐싱 전략,<br>매번 다시 계산하지 않는 지혜</h1>
+    <p class="subtitle">자주 먹는 반찬을 미리 만들어 냉장고에 넣어두듯, 캐시는 자주 쓰이는 결과를 미리 저장해 둡니다.</p>
+    <div class="vs-badge"><span class="fe">Cache Hit</span><span class="vs">vs</span><span class="be">Cache Miss</span></div>
+  </header>
+
+  <section class="intro">
+    <p>웹 서비스는 같은 질문을 하루에도 수만 번 반복해서 받습니다. 그때마다 무거운 계산을 처음부터 다시 하면 응답은 느려지고 서버 자원은 낭비됩니다. 이 글에서는 그 낭비를 줄이는 전략 &mdash; <strong>캐싱(caching)</strong> &mdash; 을 냉장고와 밑반찬 통이라는 하나의 비유로 끝까지 따라가 봅니다. 자주 먹는 반찬을 미리 만들어 냉장고에 넣어두면 다음 끼니 때 다시 요리할 필요가 없듯, 자주 요청되는 결과를 미리 저장해두면 서버도 매번 다시 계산할 필요가 없습니다. 문제는 그 냉장고를 얼마나, 어떻게, 언제까지 채워둘 것인가입니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 캐시란 무엇인가 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 열려 있는 냉장고와 밑반찬 통, 캐시의 정의, 캐시 미스와 캐시 히트의 좌우 비교, 캐싱은 거래라는 인용카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>매번 처음부터 요리해야 할까</h3></div>
+      <p class="key-msg">매번 처음부터 요리해야 할까? 캐싱은 자주 먹는 반찬을 미리 만들어 냉장고에 넣어두는 지혜에서 시작한다.</p>
+      <p class="body">활짝 열린 냉장고 안, 선반마다 투명한 밑반찬 통이 가지런히 줄지어 있습니다. 통마다 붙은 라벨은 신선한 <span class="fe-t">초록빛</span>으로 통일되어 있고, 앞치마를 입은 요리사가 그중 하나를 막 꺼내려 손을 뻗습니다. 냉장고 문 안쪽 저편으로는 김이 피어오르는 프라이팬과 도마가 흐릿하게 비치는데, 이는 &lsquo;처음부터 다시 요리하기&rsquo;라는 대안을 은근히 보여줍니다. 웹 서비스는 같은 요청을 셀 수 없이 반복해서 받는데, 그때마다 무거운 계산을 처음부터 다시 하면 느려지고 자원도 낭비됩니다. <strong>캐싱</strong>은 자주 요청되는 결과를 미리 만들어 저장해두고, 다음에 같은 요청이 오면 다시 만들지 않고 꺼내주는 전략입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>캐시란 무엇인가 &mdash; 미리 만들어 둔 결과</h3></div>
+      <p class="key-msg">캐시는 자주 쓰이는 결과를 미리 저장해두고, 다음 요청부터는 그 저장소에서 바로 꺼내 재사용하는 임시 저장 공간이다.</p>
+      <p class="body">냉장고 선반 하나를 가까이 들여다보면, &lsquo;결과 1&rsquo;, &lsquo;결과 2&rsquo;, &lsquo;결과 3&rsquo; 라벨이 붙은 밀폐용기 세 개가 놓여 있습니다. 옆에 그려진 작은 시계 아이콘은 이 반찬들이 미리 만들어 둔 것임을 알려주고, 선반에서 뻗어 나온 화살표는 요리사의 손으로 이어지며 &lsquo;재사용&rsquo;을 표현합니다. <code>cache</code>, 즉 캐시는 계산 비용이 크거나 자주 조회되는 결과를 미리 만들어 저장해두는 공간입니다. 같은 요청이 다시 들어오면 원본 데이터를 다시 계산하거나 조회하는 대신, 저장해둔 결과를 그대로 재사용합니다. 요청 → 저장소 확인 → 재사용, 이 짧은 흐름만으로 응답 속도는 빨라지고 서버와 데이터베이스의 부담은 크게 줄어듭니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>캐시 미스와 캐시 히트, 냉장고 앞에서 갈리는 운명</h3></div>
+      <p class="key-msg">냉장고에 반찬이 없으면 처음부터 요리해야 하고(캐시 미스, 느림), 반찬이 있으면 바로 꺼내 먹으면 된다(캐시 히트, 빠름).</p>
+      <p class="body">화면을 정확히 반으로 가르는 분할선을 사이에 두고 두 장면이 대비됩니다. 왼쪽은 <span class="be-t">호박색</span> 톤 &mdash; 빈 냉장고 선반 앞에서 땀 흘리며 재료를 손질하는 요리사, &lsquo;캐시 미스(Cache Miss)&rsquo; 라벨과 길게 회전하는 시계 바늘. 오른쪽은 <span class="fe-t">초록색</span> 톤 &mdash; 가득 찬 선반에서 통 하나를 여유롭게 꺼내는 요리사, &lsquo;캐시 히트(Cache Hit)&rsquo; 라벨과 짧게 멈춘 시계 바늘. 캐시에 원하는 결과가 없어서 원본 데이터를 다시 조회하거나 계산해야 하는 상황을 <strong class="be-t">캐시 미스</strong>라 부르고, 캐시에 이미 결과가 저장되어 있어서 그대로 꺼내 쓰는 상황을 <strong class="fe-t">캐시 히트</strong>라 부릅니다. 좋은 캐싱 전략의 목표는 히트율(hit rate)을 최대한 높여, 느린 미스 경로를 타는 횟수를 줄이는 것입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>한 문장으로 정리하면: 캐싱은 거래다</h3></div>
+      <p class="key-msg">캐싱은 속도를 얻는 대신 오래된 데이터라는 위험을 감수하는 거래다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">SPEED &mdash; CACHE HIT</div>
+            <div class="what">빠르게 응답하지만<br>오래된 값일 수 있다</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">FRESHNESS &mdash; CACHE MISS</div>
+            <div class="what">항상 최신이지만<br>매번 다시 계산해야 한다</div>
+          </div>
+        </div>
+        <div class="tag">caching is a trade-off</div>
+      </div>
+      <p class="body">원본 데이터가 바뀐 뒤에도 캐시는 한동안 예전 값을 그대로 들고 있을 수 있는데, 이를 <strong>신선도(freshness)</strong> 문제라고 부릅니다. 캐싱 전략을 설계한다는 것은 결국 얼마나 빠르게 응답할 것인가와 얼마나 최신 데이터를 보여줄 것인가 사이의 균형점을 찾는 일입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 계층과 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 브라우저·CDN·서버·DB 캐시 네 종류의 냉장고, 요청이 흐르는 순환 고리, 캐시 무효화라는 난제, Redis cache-aside 패턴 코드 예시">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>네 종류의 냉장고 &mdash; 캐시가 놓이는 자리</h3></div>
+      <p class="key-msg">캐시는 사용자로부터 가까운 곳부터 먼 곳까지 여러 층에 존재한다. 브라우저, CDN, 서버 메모리, DB 쿼리 캐시가 그 네 가지다.</p>
+      <p class="body">사용자 아이콘에서 뻗어 나온 점선 화살표를 따라 네 개의 타일이 늘어서 있습니다. 손바닥만 한 냉장고는 <code>브라우저 캐시</code>, 동네 편의점 냉장고는 <code>CDN 캐시</code>, 식당 주방의 대형 업소용 냉장고는 <code>서버 메모리 캐시(Redis)</code>, 지하 창고의 산업용 냉동고는 <code>DB 쿼리 캐시</code>를 나타냅니다. 왼쪽 타일일수록 속도계 바늘이 &lsquo;빠름&rsquo;에 가깝게 표시되죠. 캐시는 한 곳에만 있지 않고 여러 층으로 존재합니다. 사용자 브라우저에 저장되는 브라우저 캐시, 전 세계에 분산된 CDN 캐시, 서버 애플리케이션이 메모리에서 쓰는 Redis 같은 캐시, 그리고 데이터베이스 자체의 쿼리 캐시까지 다양합니다. 사용자에게 가까운 층일수록 응답은 빠르지만 관리할 수 있는 범위는 좁아지고, 먼 층일수록 더 근본적인 부하를 줄여줍니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>요청이 흐르는 순환 고리</h3></div>
+      <p class="key-msg">요청이 도착하면 먼저 캐시를 확인한다. 있으면 바로 반환하고(hit), 없으면 원본을 조회한 뒤 캐시에 저장한다(miss).</p>
+      <div class="flow">
+        <span class="node n-user">요청 도착</span><span class="arrow">→</span>
+        <span class="node n-api">캐시 확인</span><span class="arrow">→</span>
+        <span class="node n-fe">Hit: 즉시 반환</span><span class="arrow">/</span>
+        <span class="node n-be">Miss: 원본 조회</span><span class="arrow">→</span>
+        <span class="node n-be">캐시에 저장</span><span class="arrow">→</span>
+        <span class="node n-user">응답 반환</span>
+      </div>
+      <p class="body">요청 하나가 손님처럼 문 앞에 도착하면, 냉장고 문을 여는 손이 먼저 캐시를 확인합니다. 통이 있으면(hit) 위쪽 갈래처럼 바로 꺼내 손님에게 서빙하고, 통이 없으면(miss) 아래쪽 갈래로 내려가 주방에서 원본을 조회하거나 계산한 뒤, 갓 만든 결과를 새 통에 담아 냉장고에 넣고 나서야 서빙합니다. 캐싱의 기본 동작은 이렇게 단순합니다. 있으면 즉시 반환하고, 없으면 원본을 조회해 캐시에 저장한 뒤 반환하는 이 패턴을 코드 근처에서 직접 처리한다고 해서 <code>cache-aside</code> 패턴이라 부르며, 실무에서 가장 널리 쓰이는 캐싱 방식입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 캐시 무효화라는 난제</h3></div>
+      <p class="key-msg">원본 데이터가 바뀌었는데 캐시가 옛날 값을 그대로 들고 있으면 문제가 된다. 이를 제때 지우거나 갱신하는 일이 캐시 무효화다.</p>
+      <p class="body">어제 만든 신선한 반찬을 냉장고에 넣어둔 장면과, 오늘 조리대 위 재료는 이미 바뀌었는데도 냉장고 속 통에는 여전히 어제 라벨이 붙어 있는 장면이 위아래로 대비됩니다. 통 뚜껑 위 호박색 느낌표는 <strong class="be-t">상한 데이터(stale data)</strong>를 경고하고, 손님은 그 통을 꺼내 먹으려다 갸우뚱합니다. 캐싱에서 가장 어려운 문제 중 하나는 <strong>캐시 무효화(cache invalidation)</strong>입니다. 원본 데이터가 수정되었는데도 캐시에는 예전 값이 그대로 남아 있으면, 사용자는 이미 지나간 정보를 최신 정보인 것처럼 받게 됩니다. 데이터가 바뀔 때 캐시를 함께 지우거나(invalidate) 새 값으로 덮어쓰는 절차를 반드시 설계해야 합니다. <code>cache invalidation?</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 예시: cache-aside 패턴</h3></div>
+      <p class="key-msg">실제 코드에서는 캐시에 값을 저장할 때 만료 시간을 함께 지정하고, 조회 시 캐시부터 확인한 뒤 없으면 원본을 조회해 다시 채워 넣는다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">캐시 조회 &mdash; Hit이면 바로 반환</div>
+          <pre><span class="cm">// 냉장고부터 먼저 확인한다</span>
+<span class="kw">const</span> cached = <span class="kw">await</span> redis.get(key);
+<span class="kw">if</span> (cached) <span class="kw">return</span> JSON.parse(cached); <span class="cm">// 히트</span></pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">캐시 저장 &mdash; Miss 이후 다시 채운다</div>
+          <pre><span class="cm">// 없으면 원본을 조회해 새로 만든다</span>
+<span class="kw">const</span> data = <span class="kw">await</span> db.query(<span class="st">...</span>);
+<span class="kw">await</span> redis.set(key, JSON.stringify(data), <span class="st">'EX'</span>, <span class="st">300</span>); <span class="cm">// TTL 300초</span></pre>
+        </div>
+      </div>
+      <p class="body">먼저 Redis 같은 캐시 저장소에서 키로 값을 조회합니다. 값이 있으면 바로 파싱해 반환합니다 &mdash; 냉장고에서 통을 꺼내는 것과 같은 <span class="fe-t">히트</span> 경로입니다. 값이 없으면 데이터베이스를 직접 조회한 뒤, 그 결과를 다시 캐시에 저장하면서 <code>EX 300</code>처럼 TTL(Time To Live, 만료 시간)을 함께 지정합니다 &mdash; 새로 만든 반찬을 유통기한 라벨과 함께 냉장고에 넣는 <span class="be-t">미스</span> 이후의 절차입니다. TTL을 지정하면 일정 시간이 지난 뒤 캐시가 자동으로 만료되어, 데이터가 영원히 오래된 채로 남는 것을 막아줍니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: TTL 없이 방치된 통과 공유 캐시에 뒤섞인 도시락이라는 두 가지 실수, 네 계층의 트레이드오프 비교표, 데이터 성격에 따른 선택 체크리스트, 1초 늦어도 괜찮은가라는 판별법과 핵심 요약 칩">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수 두 가지: 유통기한 없는 통, 뒤섞인 도시락</h3></div>
+      <p class="key-msg">TTL을 설정하지 않으면 영원히 오래된 데이터를 보여줄 수 있고, 개인정보를 공유 캐시에 저장하면 보안 사고로 이어질 수 있다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ 실수 1 &mdash; TTL 없음: 영원히 오래된 데이터</div>
+        <p>먼지가 쌓이고 곰팡이가 핀 채 냉장고 깊숙이 방치된 통, 뚜껑에는 &lsquo;유통기한: 없음&rsquo;이라는 낙서가 있습니다. TTL을 설정하지 않으면 캐시가 영원히 만료되지 않아 오래된 데이터를 계속 보여주는 문제가 생깁니다.</p>
+        <div class="warn-label second">⚠ 실수 2 &mdash; 개인정보를 공유 캐시에 저장</div>
+        <p>손님 이름표가 붙은 개인 도시락통이 공용 선반에 아무렇게나 놓여, 다른 손님이 그 통을 열어보려 합니다. 사용자 개인정보나 인증이 필요한 데이터를 여러 사용자가 공유하는 캐시(CDN이나 공용 서버 캐시)에 그대로 저장하면, 다른 사용자가 그 데이터를 열람할 수 있는 심각한 보안 사고로 이어질 수 있습니다.</p>
+      </div>
+      <p class="body">개인화된 데이터는 캐시 키에 사용자 식별자를 반드시 포함시키거나, 아예 공유 캐시에 저장하지 않아야 합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 네 계층의 성격</h3></div>
+      <p class="key-msg">브라우저, CDN, 서버, DB 캐시는 속도, 용량, 최신성 유지 난이도가 서로 다르다. 층마다 성격이 다르다는 것을 알아야 제대로 쓸 수 있다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>same idea, different personality per layer</caption>
+          <thead>
+            <tr>
+              <th>캐시 계층</th>
+              <th class="fe-th">속도</th>
+              <th>용량</th>
+              <th class="be-th">최신성 유지 난이도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">브라우저 캐시</td><td>매우 빠름</td><td>작음</td><td>쉬움</td></tr>
+            <tr><td class="axis">CDN 캐시</td><td>빠름</td><td>중간</td><td>중간</td></tr>
+            <tr><td class="axis">서버 메모리 캐시 (Redis)</td><td>매우 빠름</td><td>중간</td><td>중간</td></tr>
+            <tr><td class="axis">DB 쿼리 캐시</td><td>보통</td><td>큼</td><td>어려움</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">브라우저 캐시는 매우 빠르지만 용량이 작고 서버가 직접 제어하기 어렵습니다. CDN 캐시는 지리적으로 분산되어 빠르지만 무효화에 약간의 지연이 있습니다. 서버 메모리 캐시(Redis 등)는 빠르고 세밀하게 제어할 수 있지만 서버 재시작 시 날아갈 수 있습니다. DB 쿼리 캐시는 가장 큰 데이터를 다룰 수 있지만 최신성을 유지하기가 가장 까다롭습니다. 그래서 실무에서는 이 네 층을 상황에 맞게 조합해서 씁니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>언제 무엇을 쓰나: 데이터 성격에 따른 선택</h3></div>
+      <p class="key-msg">자주 조회되고 잘 안 바뀌는 데이터는 캐시를 적극 활용하고, 잔액처럼 실시간성이 생명인 데이터는 캐시를 자제해야 한다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🥬 자주 조회, 잘 안 바뀜 → <span class="fe-t">캐시 적극 활용</span></h4>
+          <ul>
+            <li>블로그 글</li>
+            <li>상품 목록</li>
+            <li>설정 값</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>⏱ 실시간성이 생명 → <span class="be-t">캐시 자제</span></h4>
+          <ul>
+            <li>계좌 잔액</li>
+            <li>실시간 재고</li>
+            <li>주문 · 결제 상태</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">모든 데이터를 캐싱해서는 안 됩니다. 자주 조회되지만 자주 바뀌지 않는 데이터, 예를 들어 블로그 글이나 상품 목록, 설정 값 같은 데이터는 캐시를 적극적으로 활용하기 좋습니다. 반면 계좌 잔액이나 실시간 재고, 결제 상태처럼 아주 짧은 지연도 사용자에게 큰 혼란이나 손실을 줄 수 있는 데이터는 캐시를 자제하거나, 아주 짧은 TTL만 허용해야 합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>판별법과 핵심 요약: 1초 늦어도 괜찮은가</h3></div>
+      <p class="key-msg">&ldquo;이 데이터가 1초 늦게 반영돼도 괜찮은가?&rdquo;라는 질문 하나로 캐싱 여부를 판단할 수 있다.</p>
+      <p class="body">가장 간단한 판별법은 이것입니다. 이 데이터가 1초, 혹은 몇 분 늦게 반영돼도 괜찮다면 <strong class="fe-t">캐시해도 좋다</strong>는 뜻이고, 조금이라도 늦으면 안 된다면 <strong class="be-t">캐시는 피하자</strong>는 뜻입니다. 결국 캐싱은 냉장고에 밑반찬을 채워두는 일과 같습니다. 무엇을 얼마나 미리 만들어둘지, 언제 새로 만들지를 잘 판단하는 것이 좋은 캐싱 전략의 전부입니다.</p>
+      <div class="chips">
+        <span class="chip">캐시 = 미리 만든 밑반찬</span>
+        <span class="chip">히트는 빠르게, 미스는 원본 조회</span>
+        <span class="chip">TTL로 유통기한을 정하라</span>
+        <span class="chip">무효화를 반드시 설계하라</span>
+        <span class="chip">개인정보는 공유 캐시에 넣지 말라</span>
+        <span class="chip">실시간 데이터는 캐시를 자제하라</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">하나의 냉장고, 두 가지 선택</div>
+    <p>캐시는 자주 쓰이는 결과를 미리 저장해 응답을 빠르게 만들지만, 그 대가로 신선도를 관리해야 하는 책임을 함께 짊어집니다.<br>냉장고를 채울지 말지는 결국 &lsquo;얼마나 늦어도 괜찮은가&rsquo;라는 질문 하나에 달려 있습니다.</p>
+    <span class="sig">cache hit vs cache miss, understood</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

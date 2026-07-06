@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>컨테이너와 Docker — 어디서든 똑같이 돌아가는 상자 | 12컷 이미지 스토리</title>
+<meta name="description" content="표준 규격 운송 컨테이너에 비유해, 컨테이너와 Docker가 '내 컴퓨터에선 되는데' 문제를 어떻게 근본적으로 없애는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #3b82f6;
+    --be: #94a3b8;
+    --fe-deep: #2563eb;
+    --be-deep: #475569;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(59,130,246,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(37,99,235,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 인용 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #1d4ed8, #3b82f6); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #334155, #64748b); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 파이프라인 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(59,130,246,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(148,163,184,0.12); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin: 14px 0 6px; }
+  .warn-box .warn-label:first-child { margin-top: 0; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(37,99,235,0.16); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(148,163,184,0.16); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 디버깅 가이드 ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · DevOps · 12컷 이미지 스토리 #14</div>
+    <h1>컨테이너와 Docker,<br>어디서든 똑같이 돌아가는 상자</h1>
+    <p class="subtitle">표준 규격 운송 컨테이너에 비유해, &lsquo;내 컴퓨터에선 되는데&rsquo; 문제를 어떻게 근본적으로 없애는지 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">Container</span><span class="vs">vs</span><span class="be">VM</span></div>
+  </header>
+
+  <section class="intro">
+    <p>&ldquo;내 컴퓨터에선 되는데 서버에서는 안 돼요&rdquo; — 개발자라면 누구나 한 번쯤 들어봤거나 직접 내뱉어본 말입니다. 운영체제 버전, 라이브러리 버전, 환경 변수 하나만 달라도 같은 코드가 다르게 동작하는 이 오래된 골칫거리를, 이사·운송용 표준 규격 컨테이너라는 발명품에 빗대어 살펴봅니다. 트럭이든 배든 기차든 크레인이든, 안에 무엇이 들었는지와 상관없이 똑같은 방식으로 싣고 내릴 수 있는 <strong class="fe-t">컨테이너</strong>처럼, 소프트웨어의 <strong class="fe-t">컨테이너</strong> 역시 애플리케이션과 실행 환경을 하나로 포장해 <strong class="be-t">어떤 서버</strong>에 올리든 동일하게 동작하게 만듭니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 컨테이너란 무엇인가 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 항구에 쌓인 표준 규격 컨테이너 박스와 트럭·배·기차, 컨테이너의 정의, 가상머신과 컨테이너의 무게 비교, Build once run anywhere 인용카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>이 코드를 어디서든 똑같이 실행하려면</h3></div>
+      <p class="key-msg">&ldquo;내 컴퓨터에선 되는데요&rdquo;라는 말은 개발자들이 가장 많이 하는 변명이자 가장 오래된 골칫거리다.</p>
+      <p class="body">항구의 부두, 격자로 가지런히 쌓인 <span class="fe-t">스틸 블루</span> 컨테이너 박스들, 그리고 그 위로 뻗어나가 트럭과 배와 기차에 문제없이 실려 가는 컨테이너를 떠올려 보세요. 안에 무엇이 들었든 싣고 내리는 방식은 항상 똑같습니다. &ldquo;내 컴퓨터에선 되는데 서버에서는 안 된다&rdquo;는 문제는 결국 실행 환경의 차이에서 생깁니다. 운영체제 버전, 설치된 라이브러리 버전, 환경 변수 하나만 달라도 같은 코드가 다르게 동작할 수 있습니다. 컨테이너는 애플리케이션과 그 실행에 필요한 모든 것을 표준 규격 상자처럼 하나로 포장해서, 이 환경 차이라는 문제 자체를 근본적으로 없애는 기술입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: 컨테이너란 무엇인가</h3></div>
+      <p class="key-msg">컨테이너는 애플리케이션 코드와 그것을 실행하는 데 필요한 모든 것을 하나로 묶어 격리된 공간에서 실행하는 단위다.</p>
+      <p class="body">컨테이너는 애플리케이션 코드, 런타임, 라이브러리, 시스템 도구, 설정 파일을 모두 하나의 패키지로 묶어 격리된 환경에서 실행하는 단위입니다. <code>Application + Dependencies + Config</code>가 하나의 점선 테두리 안에 함께 묶여 있는 모습을 떠올리면 이해가 쉽습니다. 이 패키지 안에는 애플리케이션이 동작하는 데 필요한 모든 것이 들어 있기 때문에, 패키지를 통째로 옮기면 어느 <span class="be-t">호스트 서버</span>에서 실행하든 똑같이 동작합니다. 얇지만 분명한 경계선 하나가 컨테이너 내부와 바깥의 호스트를 갈라놓습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 가상머신과 컨테이너</h3></div>
+      <p class="key-msg">가상머신은 각자 자기만의 운영체제 전체를 통째로 들고 다니는 무거운 방식이고, 컨테이너는 운영체제 커널을 공유해서 훨씬 가볍게 격리를 구현하는 방식이다.</p>
+      <p class="body"><span class="be-t">가상머신</span>은 하이퍼바이저 위에 게스트 운영체제 전체를 설치해서 격리를 구현하기 때문에 무겁고 부팅에도 시간이 걸립니다. 두껍고 각자 따로 서 있는 상자 세 개, 그 안에 저마다 OS 전체가 통째로 들어있는 모습이 딱 그렇습니다. 반면 <span class="fe-t">컨테이너</span>는 호스트 운영체제의 커널을 여러 컨테이너가 함께 공유하고, 프로세스 수준에서만 격리를 적용합니다. 하나의 공통된 커널이라는 받침대 위에 얇은 상자들이 나란히 서 있는 것처럼요. 그래서 컨테이너는 이미지 크기가 작고 시작 속도가 초 단위, 때로는 밀리초 단위로 빠릅니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>핵심 문장 인용카드: 한 번 빌드하면 어디서든 동일하게</h3></div>
+      <p class="key-msg">컨테이너 기술 전체를 관통하는 한 문장은 &ldquo;Build once, run anywhere&rdquo;다. 빌드는 한 번, 실행은 어디서든 동일하게.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">ORIGINAL</div>
+            <div class="what">Build once,<br>run anywhere</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">번역</div>
+            <div class="what">한 번 빌드하면<br>어디서든 동일하게 실행된다</div>
+          </div>
+        </div>
+        <div class="tag">core principle</div>
+      </div>
+      <p class="body">컨테이너 이미지는 실행에 필요한 모든 것을 담고 있기 때문에, 개발자의 노트북에서 빌드한 이미지를 그대로 회사 서버나 클라우드에 올려도 동일하게 동작합니다. 이것이 &ldquo;Build once, run anywhere&rdquo;라는 원칙입니다. 환경 차이로 발생하던 배포 실패의 상당수가 이 원칙 덕분에 사라집니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 개념과 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: Dockerfile·Image·Container·Registry 개념 카탈로그, 설계도에서 실행까지 이어지는 조립 라인, 붕어빵 틀과 붕어빵으로 본 이미지와 컨테이너의 휘발성, Dockerfile과 docker run 코드 예시">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>핵심 개념 카탈로그: Dockerfile, Image, Container, Registry</h3></div>
+      <p class="key-msg">Docker를 이해하려면 네 가지 개념만 구분하면 된다: 설계도, 완성품 스냅샷, 실행 중인 인스턴스, 그리고 그것을 보관하는 창고.</p>
+      <p class="body"><code>Dockerfile</code>은 이미지를 어떻게 만들지 적어둔 설계도 텍스트 파일입니다. 이 설계도를 <code>docker build</code>로 빌드하면 <code>Image</code>라는 실행 가능한 스냅샷이 만들어지고, 이 Image를 실제로 띄우면 그것이 <code>Container</code>, 즉 실행 중인 인스턴스가 됩니다. <code>Registry</code>는 Docker Hub처럼 이렇게 만든 Image들을 저장하고 공유하는 창고 역할을 합니다. 설계도를 빌드하면 스냅샷이 되고, 스냅샷을 실행하면 인스턴스가 되며, 스냅샷은 창고에 저장해 공유하는 것 — 네 개념의 관계는 이것이 전부입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 설계도에서 실행까지 이어지는 흐름</h3></div>
+      <p class="key-msg">Dockerfile 작성부터 어느 서버에서든 동일하게 실행되기까지, 컨테이너는 네 단계의 명확한 파이프라인을 따른다.</p>
+      <div class="flow">
+        <span class="node n-user">Dockerfile 작성</span><span class="arrow">→</span>
+        <span class="node n-fe">docker build → Image</span><span class="arrow">→</span>
+        <span class="node n-api">docker push → Registry</span><span class="arrow">→</span>
+        <span class="node n-be">docker run</span><span class="arrow">→</span>
+        <span class="node n-fe">어디서든 동일하게 실행</span>
+      </div>
+      <p class="body">먼저 Dockerfile에 필요한 실행 환경을 명령어로 적습니다. 이 파일을 <code>docker build</code>로 빌드하면 Image가 만들어지고, 필요하면 <code>docker push</code>로 Registry에 올려 공유합니다. 이후 어느 서버에서든 같은 이미지를 내려받아 <code>docker run</code>으로 실행하면, 노트북이든 온프레미스 서버든 클라우드든 결과는 항상 동일합니다. 조립 라인처럼 한 방향으로만 흐르는 이 파이프라인이 배포의 불확실성을 크게 줄여줍니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 이미지와 컨테이너, 그리고 휘발성</h3></div>
+      <p class="key-msg">이미지는 붕어빵 틀이고 컨테이너는 그 틀로 구운 붕어빵이다. 그리고 컨테이너는 멈추거나 삭제되면 그 안의 변화가 사라지는 휘발성 존재다.</p>
+      <p class="body">이미지는 변하지 않는 읽기 전용 틀이고, 컨테이너는 그 틀에서 실제로 실행되는 인스턴스입니다. 같은 <span class="be-t">틀(Image)</span>로 <span class="fe-t">붕어빵(Container)</span>을 여러 개 구워낼 수 있는 것과 같습니다. 다만 컨테이너 내부에 생긴 파일 변경은 기본적으로 컨테이너와 운명을 같이 하므로, 컨테이너를 삭제하면 그 안의 데이터도 함께 증발합니다. 데이터를 영구히 보존하려면 컨테이너 바깥의 <code>Volume</code>이라는 외장 저장소에 따로 담아야 합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 예시: Dockerfile과 docker run</h3></div>
+      <p class="key-msg">실제 Dockerfile은 몇 줄의 명령어로 실행 환경을 완전히 기술하고, 이를 이미지로 만들어 한 줄의 명령으로 실행한다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">Dockerfile — 실행 환경 설계도</div>
+          <pre><span class="cm"># 실행 환경을 코드로 적는다</span>
+<span class="kw">FROM</span> node:20
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> npm install
+<span class="kw">CMD</span> [<span class="st">"node"</span>, <span class="st">"server.js"</span>]</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">Terminal — 빌드하고 실행하기</div>
+          <pre><span class="cm"># 이미지로 빌드한 뒤 실행한다</span>
+docker build -t myapp .
+docker run myapp
+<span class="cm"># → 어디서든 동일하게 동작</span></pre>
+        </div>
+      </div>
+      <p class="body"><code>FROM node:20</code>은 어떤 기본 환경 위에서 시작할지 정하고, <code>COPY . .</code>는 소스 코드를 이미지 안으로 복사하며, <code>RUN npm install</code>은 필요한 라이브러리를 설치합니다. <code>CMD</code>는 컨테이너가 시작될 때 실행할 명령을 지정합니다. 이 Dockerfile을 <code>docker build -t myapp .</code>로 빌드하면 이미지가 만들어지고, <code>docker run myapp</code>으로 어디서든 동일한 컨테이너를 즉시 띄울 수 있습니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 비대해진 이미지와 파쇄되는 컨테이너로 본 흔한 실수, 가상머신과 컨테이너의 트레이드오프 비교표, 컨테이너가 여러 개로 늘어나 오케스트레이션이 필요해지는 순간, 실전 판별법과 핵심 요약 칩">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수와 주의점</h3></div>
+      <p class="key-msg">이미지에 불필요한 것까지 다 담아 크기를 비대하게 만드는 실수, 그리고 컨테이너 안에 영구 데이터를 저장했다가 삭제와 함께 날리는 실수가 가장 흔하다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ 불필요한 파일까지 이미지에 욱여넣기</div>
+        <p>소스 코드와 빌드 도구, 임시 캐시까지 그대로 남겨두면 이미지 용량이 옆구리가 터질 듯 불필요하게 커지고, 배포와 저장 비용이 함께 늘어납니다.</p>
+        <div class="warn-label">⚠ 컨테이너 삭제 = 내부 데이터 영구 손실</div>
+        <p>컨테이너는 삭제되면 내부에 저장된 데이터도 함께 사라집니다. 데이터베이스 파일처럼 유지해야 하는 데이터를 컨테이너 안에만 두면, 컨테이너 하나가 파쇄기에 들어가듯 사라질 때 데이터도 같이 갈려 없어집니다.</p>
+        <div class="ok-label">✓ .dockerignore·멀티스테이지 빌드 + Volume</div>
+        <p>멀티 스테이지 빌드나 <code>.dockerignore</code>로 꼭 필요한 것만 이미지에 담고, 유지해야 하는 데이터는 반드시 컨테이너 바깥의 Volume에 저장해야 합니다.</p>
+      </div>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 가상머신과 컨테이너</h3></div>
+      <p class="key-msg">가상머신과 컨테이너는 시작 속도, 자원 사용량, 격리 수준, 이식성이라는 네 축에서 분명한 트레이드오프를 가진다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>same isolation, different weight class</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="fe-th">컨테이너 (Container)</th>
+              <th class="be-th">가상머신 (VM)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">시작 속도</td><td>초~밀리초 단위로 빠름</td><td>게스트 OS 부팅 필요, 느림</td></tr>
+            <tr><td class="axis">자원 사용량</td><td>가볍다 (커널 공유)</td><td>무겁다 (OS 전체 탑재)</td></tr>
+            <tr><td class="axis">격리 수준</td><td>프로세스 수준 격리 (상대적으로 약함)</td><td>하이퍼바이저 기반 완전 격리 (강함)</td></tr>
+            <tr><td class="axis">이식성</td><td>이미지 하나로 어디든 실행 (우위)</td><td>가능하지만 상대적으로 무거움</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">가상머신은 게스트 운영체제 전체를 격리하기 때문에 격리 수준은 더 강하지만, 시작 속도가 느리고 자원을 더 많이 소모합니다. 컨테이너는 커널을 공유하는 대신 시작이 빠르고 자원 사용량이 적으며 이식성이 뛰어나지만, 격리 수준은 VM보다 낮습니다. 그래서 웹 애플리케이션처럼 빠른 배포와 확장이 중요한 환경에서는 컨테이너가 널리 쓰입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>언제 무엇을 쓰나: 컨테이너가 여러 개가 되는 순간</h3></div>
+      <p class="key-msg">컨테이너 하나를 다루는 것은 쉽지만, 수십 수백 개를 함께 운영해야 하는 순간부터는 오케스트레이션 도구가 필요해진다.</p>
+      <p class="body">컨테이너 한두 개를 운영할 때는 <code>docker run</code> 명령 몇 개로 충분합니다. 손 하나로도 가볍게 다룰 수 있는 상자니까요. 하지만 서비스가 커져 수십, 수백 개의 컨테이너를 여러 서버에 나눠 운영하고, 장애 시 자동으로 재시작하고, 트래픽에 따라 자동으로 확장해야 한다면 사람이 수동으로 관리하기 어렵습니다. 이때 필요한 것이 <strong>Kubernetes</strong> 같은 오케스트레이션 도구이며, 커다란 조타 핸들처럼 다수의 컨테이너를 자동으로 배치하고 관리해 줍니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>실전 판별법과 핵심 요약</h3></div>
+      <p class="key-msg">&ldquo;새 팀원의 컴퓨터에서도 명령어 한 줄로 똑같이 돌아가는가?&rdquo;라는 질문 하나로 컨테이너화가 제대로 되었는지 판별할 수 있다.</p>
+      <p class="body">새로운 팀원이 합류했을 때, 복잡한 설치 가이드 없이 <code>docker run myapp</code> 한 줄로 프로젝트가 똑같이 실행된다면 컨테이너화가 잘 되어 있는 것입니다. 설치도 설정도 필요 없이 바로 실행되는 그 순간이야말로, 이 기술이 약속하는 것이 지켜졌다는 증거입니다.</p>
+      <div class="chips">
+        <span class="chip">Container = 격리된 실행 단위</span>
+        <span class="chip">Image = 실행 가능한 스냅샷</span>
+        <span class="chip">Dockerfile = 설계도</span>
+        <span class="chip">Build once, run anywhere</span>
+        <span class="chip">휘발성 → 영구 데이터는 Volume</span>
+        <span class="chip">여러 개면 Kubernetes</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">표준 규격 상자 하나가 바꾼 것</div>
+    <p>컨테이너는 애플리케이션과 실행 환경을 하나의 표준 규격 상자에 담아, 노트북이든 온프레미스 서버든 클라우드든 동일하게 실행되게 만듭니다.<br>다만 그 상자는 기본적으로 휘발성이라는 것, 그리고 상자가 여러 개로 늘어나는 순간부터는 오케스트레이션이 필요하다는 것을 함께 기억해야 합니다.</p>
+    <span class="sig">build once, run anywhere</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

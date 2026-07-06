@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORM(SQLAlchemy/Prisma) — SQL 없이 데이터베이스와 대화하는 법 | 12컷 이미지 스토리</title>
+<meta name="description" content="데이터베이스는 SQL이라는 외국어로만 말합니다. 통역사 비유로 ORM(SQLAlchemy/Prisma)이 SQL 없이 어떻게 데이터베이스와 대화하게 해주는지 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #a78bfa;
+    --be: #a3b1c6;
+    --fe-deep: #7c3aed;
+    --be-deep: #475569;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(124,58,237,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,58,237,0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(124,58,237,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #4c1d95, #7c3aed); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #334155, #64748b); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; letter-spacing: 0.05em; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 순환 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(124,58,237,0.12); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(71,85,105,0.22); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #8db6ff; }
+  .code-card pre .st { color: #f0c274; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(124,58,237,0.18); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(71,85,105,0.28); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 디버깅 가이드 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 데이터베이스 도구 · 12컷 이미지 스토리 #31</div>
+    <h1>ORM(SQLAlchemy/Prisma),<br>SQL 없이 데이터베이스와 대화하는 법</h1>
+    <p class="subtitle">SQL이라는 외국어로만 말하는 &lsquo;데이터베이스&rsquo;와, 그 사이에서 통역해주는 &lsquo;ORM&rsquo;이라는 통역사 이야기를 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">ORM</span><span class="vs">vs</span><span class="be">SQL</span></div>
+  </header>
+
+  <section class="intro">
+    <p>데이터베이스는 오직 <strong class="be-t">SQL</strong>이라는 정해진 문법으로만 대화합니다. 문제는 프로그래밍을 처음 배우는 사람이 SQL 문법까지 동시에 익히기가 쉽지 않다는 점입니다. 무뚝뚝한 표정으로 외국어 메뉴판을 들고 서 있는 손님과, 그 앞에서 곤란해하는 개발자를 떠올려 보세요. 이 둘 사이에 서서 통역을 해주는 도구가 있다면 어떨까요. 이 글에서는 그 통역사 — <strong class="fe-t">ORM</strong>(Object-Relational Mapping) — 이 SQLAlchemy와 Prisma라는 이름으로 어떻게 SQL을 몰라도 데이터베이스와 대화하게 해주는지, 통역사 비유를 따라 하나씩 살펴봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 통역사의 등장 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 외국어 메뉴판을 든 데이터베이스 손님과 통역사 ORM의 등장, ORM의 정의, Raw SQL과 ORM을 통한 대화 비교, 한 문장 정리">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>SQL을 몰라도 대화할 수 있을까</h3></div>
+      <p class="key-msg">데이터베이스는 SQL이라는 외국어로만 말한다. 이 언어를 몰라도 대화할 방법이 있을까.</p>
+      <p class="body">무뚝뚝한 표정의 손님이 알아볼 수 없는 기호로 빼곡한 메뉴판을 들고 서 있습니다. 이 손님의 몸은 데이터베이스 서버 랙 실루엣과 겹쳐 있고, 그가 하는 말은 오직 <span class="be-t">SQL</span> 문법뿐입니다. 그 앞에 앉은 개발자는 메뉴판을 보며 곤란한 표정을 짓습니다. 이때 둘 사이에 정장을 갖춰 입은 통역사가 등장해 손을 들어 중재합니다. 이 시리즈는 그 통역사, <span class="fe-t">ORM</span>(Object-Relational Mapping)이 어떻게 SQL 없이도 데이터베이스와 대화하게 해주는지를 다룹니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터 명확히: 통역사는 무엇을 하는가</h3></div>
+      <p class="key-msg">ORM은 프로그래밍 언어의 객체와 함수 호출을 SQL 문장으로, 데이터베이스의 응답을 다시 객체로 자동 변환해주는 도구다.</p>
+      <p class="body"><span class="fe-t">ORM(Object-Relational Mapping)</span>은 이름 그대로 객체(Object)와 관계형 데이터베이스(Relational)를 서로 연결(Mapping)해주는 도구입니다. 개발자가 익숙한 프로그래밍 언어의 문법으로 <code>User.find(1)</code>처럼 코드를 작성하면, ORM이 이를 <code>SELECT * FROM users WHERE id=1</code>이라는 SQL 문장으로 통역해 데이터베이스에 전달합니다. 데이터베이스가 응답을 돌려주면 ORM은 그 결과를 다시 프로그래밍 언어의 객체로 통역해 돌려줍니다. 손님이 외국어로만 말해도 통역사가 있으면 대화가 되듯, ORM이 있으면 <span class="be-t">SQL</span> 문법을 몰라도 데이터베이스와 대화할 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 직접 대화 vs 통역사를 통한 대화</h3></div>
+      <p class="key-msg">Raw SQL은 세밀하게 통제할 수 있지만 문법을 정확히 알아야 하고, ORM은 익숙한 문법으로 다루지만 내부적으로는 여전히 SQL이 생성되어 실행된다.</p>
+      <p class="body"><strong>Raw SQL</strong>을 직접 작성하는 방식은 원하는 쿼리를 한 글자까지 세밀하게 제어할 수 있지만, 그만큼 SQL 문법을 정확히 알고 있어야 합니다. <span class="fe-t">ORM</span>을 쓰는 방식은 익숙한 프로그래밍 언어의 객체와 함수 호출로 데이터베이스를 다룰 수 있어 진입 장벽이 낮지만, 그 코드가 결국 내부적으로 SQL로 통역되어 실행된다는 사실은 변하지 않습니다. 통역사를 쓰면 대화는 편해지지만, 대화 내용이 결국 상대방의 언어로 전달된다는 본질은 같습니다. <code>정확한 문법 필요 / 세밀한 제어 가능</code> 대 <code>익숙한 문법 사용 / 내부적으로 SQL 자동 생성</code>의 저울질입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>한 문장으로 정리하면</h3></div>
+      <p class="key-msg">ORM은 개발자의 언어와 데이터베이스의 언어 사이에서 양방향으로 통역해주는 다리다.</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">ORM</div>
+            <div class="what">코드의 언어를<br>SQL로 옮긴다</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">SQL</div>
+            <div class="what">데이터베이스가<br>실제로 알아듣는 말</div>
+          </div>
+        </div>
+        <div class="tag">definition</div>
+      </div>
+      <p class="body">ORM은 개발자가 쓰는 프로그래밍 언어와 데이터베이스가 쓰는 SQL 언어 사이에서 양방향으로 통역해주는 다리입니다. 이 한 문장만 기억해도 ORM이 왜 필요한지, 무엇을 대신해주는지 대부분 이해할 수 있습니다. 개발자가 익숙한 문법으로 말하면, 그 뒤에서 통역사가 SQL로 옮겨 전달하고 응답도 다시 옮겨 돌려줍니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 도구와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 언어별 통역사 카탈로그(SQLAlchemy, Prisma), 통역이 오가는 순환 다이어그램, 통역사가 직접 SQL로 말하는 raw query 경계, ORM 코드와 통역된 SQL 비교">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>통역사 협회 카탈로그: 언어별 통역사와 그 도구들</h3></div>
+      <p class="key-msg">ORM은 프로그래밍 언어마다 대표적인 도구가 있으며, 모델 정의로 테이블 구조를 코드로 표현하고 마이그레이션으로 그 구조의 변경 이력을 관리한다.</p>
+      <p class="body">ORM은 프로그래밍 언어마다 대표적인 도구가 정해져 있습니다. Python에서는 <code>SQLAlchemy</code>가, Node.js/TypeScript에서는 <code>Prisma</code>가 대표적인 통역사 역할을 맡습니다. 이 통역사들은 <strong>모델(Model)</strong>이라는 설계도를 통해 테이블의 구조(어떤 열이 있고 어떤 자료형인지)를 코드로 표현합니다. 그리고 그 구조가 바뀔 때마다 <strong>마이그레이션(migration)</strong>이라는 이력 파일을 남겨, 테이블 구조가 언제 어떻게 변경되었는지 추적하고 실제 데이터베이스에도 그 변경을 순서대로 적용할 수 있게 해줍니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: 통역이 오가는 순환</h3></div>
+      <p class="key-msg">개발자가 익숙한 코드로 요청하면 ORM이 이를 SQL로 통역해 데이터베이스에 전달하고, 응답도 다시 통역해 객체로 돌려주는 순환이 ORM의 기본 동작 방식이다.</p>
+      <div class="flow">
+        <span class="node n-user">개발자 코드</span><span class="arrow">→</span>
+        <span class="node n-fe">ORM 통역</span><span class="arrow">→</span>
+        <span class="node n-api">SQL 문장</span><span class="arrow">→</span>
+        <span class="node n-be">데이터베이스</span><span class="arrow">→</span>
+        <span class="node n-api">row 반환</span><span class="arrow">→</span>
+        <span class="node n-fe">객체로 통역</span>
+      </div>
+      <p class="body">개발자가 <code>User.create(name='송')</code>처럼 익숙한 코드로 명령을 내리면, ORM은 이를 <code>INSERT INTO users (name) VALUES ('송')</code> 같은 SQL 문장으로 통역해 데이터베이스에 전달합니다. 데이터베이스는 SQL을 실행한 결과를 행(row) 형태로 돌려주고, ORM은 그 행을 다시 개발자가 다루기 쉬운 객체로 통역해 돌려줍니다. 손님이 주문하면 통역사가 옮겨 전달하고, 요리가 나오면 다시 통역사를 거쳐 손님에게 설명이 돌아오는 것과 같은 순환입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 통역사도 가끔 원어로 직접 말해야 할 때</h3></div>
+      <p class="key-msg">ORM을 쓰더라도 복잡하거나 성능이 중요한 쿼리는 여전히 Raw SQL을 직접 작성해 실행할 수 있는 통로가 열려 있다.</p>
+      <p class="body">ORM은 대부분의 데이터베이스 작업을 코드 문법만으로 처리할 수 있게 해주지만, 통계 집계나 복잡한 조인처럼 세밀한 제어가 필요한 쿼리에서는 오히려 <strong class="be-t">Raw SQL</strong>을 직접 작성하는 편이 더 명확하고 빠를 때가 있습니다. SQLAlchemy와 Prisma 모두 필요할 때 SQL 문장을 그대로 실행할 수 있는 기능(raw query)을 제공합니다. 즉 ORM을 쓴다고 해서 SQL을 완전히 몰라도 되는 것은 아니며, 통역사에게 맡기되 필요하면 직접 원어로 말할 수 있는 통로도 함께 열어두는 것이 실무적인 접근입니다. <code>ORM도 만능은 아니다</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 차이: 모델 정의와 통역된 쿼리</h3></div>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">ORM 코드 — 통역사에게 말하기</div>
+          <pre><span class="cm"># 익숙한 문법으로 요청한다</span>
+user = User.query.filter_by(
+  id=<span class="st">1</span>
+).first()</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">실제 실행되는 SQL — 통역된 결과</div>
+          <pre><span class="cm">-- 데이터베이스가 실제로 받는 문장</span>
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> users
+<span class="kw">WHERE</span> id = <span class="st">1</span> <span class="kw">LIMIT</span> <span class="st">1</span>;</pre>
+        </div>
+      </div>
+      <p class="body">SQLAlchemy에서는 <code>User.query.filter_by(id=1).first()</code>처럼 파이썬 객체 문법으로 원하는 데이터를 요청합니다. Prisma에서도 <code>prisma.user.findUnique({ where: { id: 1 } })</code>처럼 익숙한 함수 호출 형태로 같은 일을 할 수 있습니다. 이 코드는 겉으로는 SQL이 전혀 보이지 않지만, ORM이 내부에서 이를 <code>SELECT * FROM users WHERE id = 1 LIMIT 1;</code>이라는 SQL 문장으로 통역해 데이터베이스에 전달합니다. 개발자는 통역사에게 자연스럽게 말을 건넬 뿐이지만, 데이터베이스가 실제로 알아듣는 언어는 여전히 SQL입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: N+1 쿼리와 방치된 마이그레이션이라는 흔한 실수, 통역사에게 맡길 때의 트레이드오프 비교표, 쿼리 로그와 DB 도구로 확인하는 실전 습관, ORM이 보이지 않아도 일하고 있다는 판별법과 핵심 요약">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: 통역사의 습관을 눈치채지 못한 개발자</h3></div>
+      <p class="key-msg">ORM이 내부적으로 비효율적인 SQL을 여러 번 생성하는 것을 모른 채 쓰면 N+1 쿼리 문제로 느려지고, 마이그레이션을 실행하지 않으면 코드와 실제 테이블 구조가 어긋난다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ N+1 쿼리 문제</div>
+        <p>ORM이 목록을 조회한 뒤 각 항목마다 관련 데이터를 따로따로 다시 조회하면, 쿼리 하나면 될 일이 N개의 추가 쿼리로 늘어납니다. ORM이 편리하게 통역해주는 대신, 그 통역이 내부적으로 얼마나 많은 SQL을 반복해서 만들어내는지 신경 쓰지 않으면 눈에 띄지 않게 서비스를 느리게 만듭니다.</p>
+        <div class="ok-label">✓ 코드는 바뀌었는데 실제 테이블은 그대로</div>
+        <p>또 다른 흔한 실수는 모델 코드만 수정하고 마이그레이션 파일을 실제로 실행하지 않는 것입니다. 이 경우 코드상의 설계도는 바뀌었는데 실제 데이터베이스 테이블 구조는 예전 그대로여서, 둘 사이의 불일치로 인한 오류가 예기치 않게 발생합니다.</p>
+      </div>
+      <p class="body">통역사가 손님 한 명 한 명에게 같은 질문을 반복해서 되묻는 장면을 상상해 보세요. 쪽지가 잔뜩 쌓이는 동안 대화는 점점 느려집니다. 통역사의 습관을 눈치채지 못하면, 편리함 뒤에 숨은 비용을 그대로 떠안게 됩니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 통역사에게 맡길 때 얻는 것과 잃는 것</h3></div>
+      <p class="key-msg">ORM은 SQL 문법을 몰라도 익숙한 언어 문법으로 데이터베이스를 다룰 수 있게 해주지만, 그 대가로 내부적으로 실제 어떤 SQL이 실행되는지 파악하기 어려워질 수 있다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>같은 목적, 다른 대가</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="be-th">Raw SQL</th>
+              <th class="fe-th">ORM</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">진입 장벽</td><td>SQL 문법을 정확히 알아야 함</td><td>익숙한 언어 문법으로 바로 시작</td></tr>
+            <tr><td class="axis">실행 내용의 투명성</td><td>투명한 유리창 — 한 글자까지 통제</td><td>반투명한 커튼 — 통역을 거쳐 전달</td></tr>
+            <tr><td class="axis">생산성</td><td>상대적으로 느림</td><td>상대적으로 빠름</td></tr>
+            <tr><td class="axis">세밀한 제어</td><td>정밀하게 가능</td><td>뭉툭해질 수 있음</td></tr>
+            <tr><td class="axis">성능 파악 난이도</td><td>지도와 나침반 — 파악하기 쉬움</td><td>안개 낀 지도 — 파악하기 어려움</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">ORM을 쓰면 SQL 문법을 몰라도 익숙한 프로그래밍 언어 문법만으로 데이터베이스를 다룰 수 있어 진입 장벽이 낮고 생산성이 높습니다. 하지만 통역사가 대신 말을 옮겨주기 때문에, 실제로 데이터베이스에 어떤 SQL 문장이 몇 번 실행되고 있는지 코드만 봐서는 파악하기 어려워질 수 있습니다. Raw SQL은 반대로 문법을 정확히 알아야 하는 대신, 실행되는 내용을 한 글자까지 투명하게 통제할 수 있습니다. 결국 편의성과 투명성 사이에서 어느 쪽에 더 무게를 둘지의 문제입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>실전 활용: 통역사의 대사를 엿듣고, 서랍을 직접 열어보기</h3></div>
+      <p class="key-msg">ORM이 실제로 생성하는 SQL 쿼리를 로그로 확인하고, 마이그레이션 실행 뒤 실제 테이블 구조가 바뀌었는지 DB 도구로 확인하는 습관이 문제를 예방한다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🎧 통역사의 대사를 엿듣기</h4>
+          <ul>
+            <li>SQLAlchemy: <code>create_engine(url, echo=True)</code></li>
+            <li>Prisma: 쿼리 로그 옵션 켜기</li>
+            <li>콘솔에 출력되는 실제 SQL 확인</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🔍 서랍을 직접 열어보기</h4>
+          <ul>
+            <li>마이그레이션 명령 실행</li>
+            <li>TablePlus·DBeaver·pgAdmin으로 접속</li>
+            <li>실제 테이블 구조가 바뀌었는지 확인</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">SQLAlchemy에서는 <code>create_engine</code>에 <code>echo=True</code> 옵션을 주면 ORM이 내부적으로 실행하는 모든 SQL 쿼리가 콘솔에 그대로 출력되어, 통역사가 실제로 무슨 말을 하고 있는지 엿들을 수 있습니다. Prisma도 로그 옵션을 켜면 비슷하게 실제 쿼리를 확인할 수 있습니다. 또한 마이그레이션 명령을 실행한 뒤에는 반드시 DB 관리 도구로 실제 테이블 구조가 원하는 대로 바뀌었는지 직접 눈으로 확인하는 습관이 중요합니다. <code>trust, but verify</code> — 통역사를 믿되, 가끔은 그 대사와 결과물을 직접 확인하는 것이 사고를 예방하는 가장 확실한 방법입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>판별법과 핵심 요약: 통역사가 필요한 순간</h3></div>
+      <p class="key-msg">데이터베이스와 대화하는 코드에서 SQL 문장이 보이지 않고 객체와 함수 호출만 보인다면, 그 뒤에는 이미 통역사인 ORM이 일하고 있는 것이다.</p>
+      <p class="body">가장 간단한 판별법은 이것입니다. 코드에 <span class="be-t">SQL</span> 문장이 전혀 보이지 않고 객체와 함수 호출만 보인다면, 그 뒤에서 <span class="fe-t">ORM</span>이라는 통역사가 이미 SQL로 옮겨 데이터베이스와 대화하고 있는 것입니다. ORM은 모델로 테이블 구조를 코드로 표현하고, 마이그레이션으로 그 구조의 변경 이력을 관리하며, 개발자가 익숙한 언어로 요청하면 SQL로 통역해 실행하고 결과를 다시 객체로 돌려줍니다. 다만 통역이 항상 최선의 문장으로 이루어지는 것은 아니므로, N+1 쿼리처럼 비효율이 숨어 있지 않은지 가끔 그 대사를 확인하는 습관이 필요합니다. 손님이 외국어로만 말해도 통역사 덕분에 대화가 이어지듯, SQL을 몰라도 ORM 덕분에 데이터베이스와 대화할 수 있습니다.</p>
+      <div class="chips">
+        <span class="chip">ORM은 코드와 SQL 사이의 통역사다</span>
+        <span class="chip">모델은 테이블의 설계도다</span>
+        <span class="chip">마이그레이션은 변경 이력을 관리한다</span>
+        <span class="chip">N+1 쿼리를 조심하라</span>
+        <span class="chip">필요하면 raw SQL도 쓸 수 있다</span>
+        <span class="chip">SQL이 안 보여도 결국 실행된다</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">SQL을 몰라도, 데이터베이스와 대화할 수 있다</div>
+    <p>ORM은 개발자가 익숙한 언어로 말하게 하고, 그 말을 SQL로 옮겨 데이터베이스에 전달하는 통역사입니다.<br>모델로 테이블을 설계하고, 마이그레이션으로 변경 이력을 관리하며, 필요하면 언제든 원어(Raw SQL)로도 말할 수 있는 통로를 열어둡니다.</p>
+    <span class="sig">code in, SQL out, understood</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>

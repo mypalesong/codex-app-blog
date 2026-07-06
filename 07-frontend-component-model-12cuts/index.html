@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>컴포넌트 기반 프론트엔드 — 레고 블록처럼 UI 조립하기 | 12컷 이미지 스토리</title>
+<meta name="description" content="레고 블록 조립에 비유해, 복잡한 화면을 작은 컴포넌트로 나눠 관리 가능하게 만드는 방법을 12컷 이미지 스토리로 풀어봅니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fe: #38bdf8;
+    --be: #fbbf24;
+    --fe-deep: #0284c7;
+    --be-deep: #d97706;
+    --bg: #14161b;
+    --panel: #1d2027;
+    --panel-2: #22252d;
+    --ink: #e6e8ee;
+    --ink-soft: #a6abb8;
+    --line: #2e323c;
+    --sans: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --code: "JetBrains Mono", "D2Coding", Consolas, monospace;
+    /* 폰트 통일: 헤딩·라벨 모두 Pretendard, 실제 코드만 모노스페이스 */
+    --mono: var(--sans);
+    --serif: var(--sans);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(56,189,248,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.8;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 28px 96px; }
+
+  /* ---------- header ---------- */
+  header { padding: 76px 0 44px; text-align: center; border-bottom: 1px solid var(--line); }
+  .series-tag {
+    display: inline-block; font-family: var(--sans); font-size: 0.82rem;
+    font-weight: 500; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 5px 16px; border-radius: 999px; margin-bottom: 24px;
+  }
+  h1 {
+    font-family: var(--serif); font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+    font-weight: 700; line-height: 1.4; margin-bottom: 18px;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.06rem; margin-bottom: 28px; }
+  .vs-badge {
+    display: inline-flex; align-items: stretch; font-family: var(--mono);
+    font-size: 0.88rem; font-weight: 700; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  .vs-badge span { padding: 8px 20px; color: #fff; }
+  .vs-badge .fe { background: var(--fe-deep); }
+  .vs-badge .vs { background: var(--panel-2); color: var(--ink); }
+  .vs-badge .be { background: var(--be-deep); }
+
+  /* ---------- intro ---------- */
+  .intro { max-width: 900px; margin: 0 auto; padding: 44px 0 8px; font-size: 1.07rem; color: var(--ink-soft); }
+  .fe-t { color: var(--fe); font-weight: 700; }
+  .be-t { color: var(--be); font-weight: 700; }
+
+  /* ---------- part ---------- */
+  .part { margin-top: 72px; }
+  .part-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    color: var(--ink-soft); margin-bottom: 20px;
+  }
+  .part-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* ---------- fourcut image + floating zoom button ---------- */
+  figure.fourcut { margin: 0 0 12px; display: flex; flex-direction: column; }
+  figure.fourcut img {
+    width: 100%; height: auto; display: block; border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 44px rgba(0,0,0,0.5);
+  }
+  figure.fourcut figcaption {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);
+    text-align: center; padding-top: 12px;
+  }
+  .zoom-btn {
+    align-self: flex-end; margin-bottom: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+    background: var(--panel);
+    color: var(--ink); font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    transition: background .18s, color .18s, transform .18s;
+  }
+  .zoom-btn:hover { background: var(--fe-deep); color: #fff; transform: scale(1.04); }
+  .zoom-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+  /* ---------- image popup viewer ---------- */
+  .viewer-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(8,9,12,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.open { display: flex; }
+  .viewer-box {
+    position: relative; width: 90vw; height: 90vh;
+    background: #101216; border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .viewer-stage {
+    position: absolute; inset: 0; overflow: hidden;
+    cursor: grab; touch-action: none;
+  }
+  .viewer-stage.dragging { cursor: grabbing; }
+  .viewer-stage img {
+    position: absolute; top: 0; left: 0;
+    transform-origin: 0 0; will-change: transform;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+    max-width: none;
+  }
+  .viewer-top {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .viewer-top .v-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 40px; padding: 0 12px;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; cursor: pointer;
+    background: rgba(20,22,27,0.8); color: #fff;
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 700;
+    transition: background .15s;
+  }
+  .viewer-top .v-btn:hover { background: rgba(2,132,199,0.85); }
+  .viewer-hint {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10;
+    font-family: var(--mono); font-size: 0.75rem; color: rgba(255,255,255,0.75);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 16px; border-radius: 999px; white-space: nowrap;
+  }
+  .viewer-scale {
+    position: absolute; left: 14px; top: 14px; z-index: 10;
+    font-family: var(--mono); font-size: 0.8rem; color: rgba(255,255,255,0.85);
+    background: rgba(20,22,27,0.8); border: 1px solid rgba(255,255,255,0.15);
+    padding: 7px 14px; border-radius: 10px;
+  }
+  body.viewer-lock { overflow: hidden; }
+
+  /* ---------- scene ---------- */
+  .scene { margin-top: 48px; }
+  .scene-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .cut-no {
+    font-family: var(--mono); font-size: 0.76rem; font-weight: 700; color: #fff;
+    padding: 3px 11px; border-radius: 6px; white-space: nowrap;
+  }
+  .scene:nth-of-type(odd) .cut-no { background: var(--fe-deep); }
+  .scene:nth-of-type(even) .cut-no { background: var(--be-deep); }
+  .scene h3 { font-family: var(--serif); font-size: 1.38rem; font-weight: 700; line-height: 1.5; }
+  .key-msg {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 14px;
+    padding-left: 14px; border-left: 3px solid var(--line);
+  }
+  .scene p.body { color: var(--ink-soft); font-size: 1.0rem; max-width: 980px; }
+  .scene code {
+    font-family: var(--code); font-size: 0.86em; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; color: var(--ink);
+  }
+
+  /* ---------- 정의 카드 (씬 04) ---------- */
+  .quote-card {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.4); border: 1px solid var(--line);
+    max-width: 900px;
+  }
+  .quote-card .halves { display: grid; grid-template-columns: 1fr 1fr; }
+  .quote-card .half { padding: 28px 26px; color: #fff; }
+  .quote-card .half.fe-h { background: linear-gradient(135deg, #0369a1, #0ea5e9); }
+  .quote-card .half.be-h { background: linear-gradient(135deg, #b45309, #f59e0b); }
+  .quote-card .half .who { font-family: var(--sans); font-size: 0.75rem; font-weight: 700; opacity: 0.85; margin-bottom: 8px; }
+  .quote-card .half .what { font-family: var(--serif); font-size: 1.18rem; font-weight: 700; line-height: 1.55; }
+  .quote-card .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); text-align: center; padding: 8px; background: var(--panel); }
+  @media (max-width: 560px) { .quote-card .halves { grid-template-columns: 1fr; } }
+
+  /* ---------- 흐름 다이어그램 (씬 06) ---------- */
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+    margin: 20px 0 8px; padding: 20px 16px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 0.84rem;
+  }
+  .flow .node { padding: 6px 13px; border-radius: 8px; border: 1.5px solid; font-weight: 700; white-space: nowrap; }
+  .flow .n-user { border-color: var(--ink-soft); color: var(--ink); background: var(--panel-2); }
+  .flow .n-fe { border-color: var(--fe); color: var(--fe); background: rgba(56,189,248,0.1); }
+  .flow .n-api { border-color: var(--ink-soft); color: var(--ink-soft); background: var(--panel-2); border-style: dashed; }
+  .flow .n-be { border-color: var(--be); color: var(--be); background: rgba(251,191,36,0.1); }
+  .flow .arrow { color: var(--ink-soft); }
+
+  /* ---------- 코드 카드 (씬 08) ---------- */
+  .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .code-pair { grid-template-columns: 1fr; } }
+  .code-card { border-radius: 12px; overflow: hidden; border: 1.5px solid; background: var(--panel); }
+  .code-card.fe-c { border-color: var(--fe-deep); }
+  .code-card.be-c { border-color: var(--be-deep); }
+  .code-card .code-title { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #fff; padding: 8px 15px; }
+  .code-card.fe-c .code-title { background: var(--fe-deep); }
+  .code-card.be-c .code-title { background: var(--be-deep); }
+  .code-card pre {
+    font-family: var(--code); font-size: 0.82rem; line-height: 1.7;
+    padding: 16px 18px; overflow-x: auto; background: #15171c; color: #dfe2ea;
+  }
+  .code-card pre .cm { color: #7a7f8c; }
+  .code-card pre .kw { color: #7fd0ff; }
+  .code-card pre .st { color: #f5c874; }
+
+  /* ---------- 경고 박스 (씬 09) ---------- */
+  .warn-box {
+    margin: 20px 0 8px; padding: 20px 22px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 4px solid #ef5b60; max-width: 980px;
+  }
+  .warn-box .warn-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #ef5b60; margin-bottom: 6px; }
+  .warn-box .ok-label { font-family: var(--mono); font-size: 0.78rem; font-weight: 700; color: #4ecb8d; margin: 14px 0 6px; }
+  .warn-box p { font-size: 0.94rem; color: var(--ink-soft); }
+
+  /* ---------- 비교표 (씬 10) ---------- */
+  .table-scroll { overflow-x: auto; margin: 20px 0 8px; }
+  table.tradeoff {
+    width: 100%; min-width: 560px; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); font-size: 0.95rem;
+  }
+  table.tradeoff th, table.tradeoff td { padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.tradeoff tr:last-child td { border-bottom: none; }
+  table.tradeoff thead th { font-family: var(--mono); font-size: 0.84rem; }
+  table.tradeoff thead th.fe-th { background: rgba(14,165,233,0.16); color: var(--fe); }
+  table.tradeoff thead th.be-th { background: rgba(245,158,11,0.14); color: var(--be); }
+  table.tradeoff td.axis { font-weight: 700; font-size: 0.88rem; background: var(--panel-2); white-space: nowrap; }
+  table.tradeoff td { color: var(--ink-soft); }
+  table.tradeoff td.axis { color: var(--ink); }
+  table.tradeoff caption {
+    caption-side: bottom; font-family: var(--mono); font-size: 0.75rem;
+    color: var(--ink-soft); padding-top: 10px;
+  }
+
+  /* ---------- 판별 가이드 (씬 11) ---------- */
+  .debug-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0 8px; }
+  @media (max-width: 760px) { .debug-pair { grid-template-columns: 1fr; } }
+  .debug-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .debug-card.fe-d { border-top: 4px solid var(--fe-deep); }
+  .debug-card.be-d { border-top: 4px solid var(--be-deep); }
+  .debug-card h4 { font-family: var(--serif); font-size: 1.06rem; margin-bottom: 10px; }
+  .debug-card ul { list-style: none; }
+  .debug-card li { font-size: 0.93rem; color: var(--ink-soft); padding: 4px 0 4px 24px; position: relative; }
+  .debug-card li::before { content: "✓"; position: absolute; left: 0; font-family: var(--mono); font-weight: 700; }
+  .debug-card.fe-d li::before { color: var(--fe); }
+  .debug-card.be-d li::before { color: var(--be); }
+
+  /* ---------- 요약 칩 (씬 12) ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 8px; justify-content: center; }
+  .chip {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: #fff;
+    padding: 9px 18px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .chip:nth-child(odd) { background: var(--fe-deep); }
+  .chip:nth-child(even) { background: var(--be-deep); }
+
+  /* ---------- footer ---------- */
+  .outro {
+    margin: 80px auto 0; padding: 38px 34px; text-align: center; max-width: 900px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.4);
+  }
+  .outro .fin { font-family: var(--serif); font-size: 1.28rem; font-weight: 700; margin-bottom: 12px; }
+  .outro p { color: var(--ink-soft); font-size: 0.99rem; }
+  .outro .sig {
+    display: inline-block; margin-top: 20px; font-family: var(--mono);
+    font-size: 0.78rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="series-tag">웹 애플리케이션 개발 · 프론트엔드 기초 · 12컷 이미지 스토리 #07</div>
+    <h1>컴포넌트 기반 프론트엔드,<br>레고 블록처럼 UI 조립하기</h1>
+    <p class="subtitle">복잡한 웹 화면을 레고 블록 조립에 비유해, 작은 조각으로 나눠 관리 가능하게 만드는 법을 12컷으로 풀어봅니다.</p>
+    <div class="vs-badge"><span class="fe">Component</span><span class="vs">＋</span><span class="be">Assemble</span></div>
+  </header>
+
+  <section class="intro">
+    <p>우리가 브라우저에서 보는 하나의 화면은 사실 처음부터 통짜로 만들어지지 않습니다. 완성된 웹페이지를 폭발도처럼 분해해 보면, 헤더는 긴 직사각형 블록으로, 버튼은 작은 정육면체로, 카드는 넓적한 판으로 흩어집니다. 이 조각 하나하나가 프론트엔드 개발에서 말하는 <strong class="fe-t">컴포넌트(component)</strong>이고, 조각들을 이어붙이는 규칙이 <strong class="be-t">조립(props와 이벤트)</strong>입니다. 이 글에서는 레고 블록 같은 컴포넌트가 무엇이고 왜 필요한지, 어떻게 쪼개고 어떻게 이어붙이는지를 하나씩 살펴봅니다.</p>
+  </section>
+
+  <!-- ================= PART 1 : 컷 01 ~ 04 ================= -->
+  <section class="part">
+    <div class="part-label">PART 1 / 3 &mdash; 블록의 발견 (컷 01&ndash;04)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-01.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-01.png" alt="컷 1~4: 웹 화면이 레고 블록으로 분해되는 표지, 마크업과 로직을 하나로 묶은 컴포넌트의 정의, 거대한 코드 덩어리와 컴포넌트 트리의 비교, 핵심 원칙 인용 카드">
+      <figcaption>fourcut-01 &mdash; 컷 01 ~ 04</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 01</span><h3>이 화면은 무엇으로 이루어져 있나</h3></div>
+      <p class="key-msg">완성된 웹 화면도 사실은 레고 블록처럼 작은 조각들이 조립된 결과물이다.</p>
+      <p class="body">헤더, 카드 목록, 버튼이 가지런히 놓인 평범한 웹페이지 하나가 하늘에 떠 있습니다. 그 화면이 폭발도(exploded view)처럼 서서히 분해되면, 조각들은 <span class="fe-t">하늘색 레고 블록</span>으로 변합니다. 헤더는 긴 직사각형 블록, 버튼은 작은 정육면체, 카드는 넓적한 판 블록 — 그리고 블록 사이사이에는 <span class="be-t">호박색 커넥터</span>가 연결선처럼 반짝입니다. 이 조각 하나하나가 바로 컴포넌트이며, 이번 이야기는 이 레고 블록 같은 컴포넌트가 무엇이고 왜 필요한지를 다룹니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 02</span><h3>정의부터: 컴포넌트란 무엇인가</h3></div>
+      <p class="key-msg">컴포넌트는 UI의 겉모습(마크업)과 그 동작 로직을 하나로 묶은, 독립적으로 재사용 가능한 단위다.</p>
+      <p class="body">레고 블록 하나를 클로즈업해 보면, 겉면에는 버튼 아이콘이 그려져 있고(겉모습), 반투명한 내부에는 톱니바퀴가 들어 있습니다(동작 로직). 컴포넌트란 이렇게 화면의 일부분을 그리는 <span class="fe-t">마크업</span>과 그 부분이 어떻게 동작할지 결정하는 <span class="be-t">로직</span>을 하나의 단위로 묶어놓은 것입니다. 버튼 컴포넌트는 버튼처럼 보이는 모양과 클릭했을 때 실행될 동작을 함께 가지고 있습니다. 이렇게 묶어두면 이 조각을 다른 화면에서도 그대로 가져다 쓸 수 있고, 이 조각만 따로 떼어 테스트하거나 수정할 수 있습니다. <code>모양(마크업) + 동작(로직) = 하나의 블록</code></p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 03</span><h3>나란히 비교: 거대한 코드 덩어리 vs 컴포넌트 트리</h3></div>
+      <p class="key-msg">컴포넌트 없이 만든 화면은 뒤엉킨 하나의 실타래고, 컴포넌트로 쪼갠 화면은 정돈된 조립 구조도다.</p>
+      <p class="body">컴포넌트 개념 없이 화면을 만들면 헤더, 목록, 버튼의 코드와 상태가 한 파일 안에 뒤섞여, 어디를 고쳐야 무엇이 바뀌는지 알기 어려운 거대한 회색 실타래가 됩니다. 반면 컴포넌트로 나누면 화면은 뿌리에서 가지로 뻗어나가는 <span class="fe-t">트리 구조</span>가 되어, 각 가지(컴포넌트)가 자신의 역할만 책임집니다. 가지 끝마다 헤더, 버튼, 카드 블록이 달려 있고 연결선은 호박색 커넥터로 이어져 있는 구조도 — 같은 화면이라도 구조가 다르면 특정 부분만 골라 찾고, 고치고, 재사용하는 일의 난이도가 완전히 달라집니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 04</span><h3>핵심 원칙: 권위 있는 정의 한 장</h3></div>
+      <p class="key-msg">&ldquo;UI를 독립적이고 재사용 가능한 조각으로 나누고, 각 조각을 개별적으로 다룬다.&rdquo;</p>
+      <div class="quote-card">
+        <div class="halves">
+          <div class="half fe-h">
+            <div class="who">독립적 (INDEPENDENT)</div>
+            <div class="what">다른 조각의 내부 사정을<br>몰라도 동작한다</div>
+          </div>
+          <div class="half be-h">
+            <div class="who">재사용 가능 (REUSABLE)</div>
+            <div class="what">한 번 만들면 여러 화면에서<br>다시 쓸 수 있다</div>
+          </div>
+        </div>
+        <div class="tag">core principle</div>
+      </div>
+      <p class="body">이것이 컴포넌트 기반 설계의 핵심 원칙입니다. 여기서 중요한 단어는 두 개인데, 하나는 <span class="fe-t">독립적</span> — 다른 조각의 내부 사정을 몰라도 동작해야 한다는 뜻이고, 다른 하나는 <span class="be-t">재사용 가능</span> — 한 번 만들면 여러 화면에서 다시 쓸 수 있어야 한다는 뜻입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 2 : 컷 05 ~ 08 ================= -->
+  <section class="part">
+    <div class="part-label">PART 2 / 3 &mdash; 종류와 동작 원리 (컷 05&ndash;08)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-02.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-02.png" alt="컷 5~8: 네 가지 컴포넌트 종류 카탈로그, props와 이벤트가 오가는 단방향 데이터 흐름, 상태를 어디에 둘지 고민하는 깊은 트리와 저울, Button.jsx 컴포넌트 코드 예시">
+      <figcaption>fourcut-02 &mdash; 컷 05 ~ 08</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 05</span><h3>컴포넌트 종류 카탈로그: 네 가지 블록</h3></div>
+      <p class="key-msg">컴포넌트는 역할에 따라 보여주기 전용, 로직 담당, 배치 담당, 범용 UI의 네 가지로 나눌 수 있다.</p>
+      <p class="body">조립 설명서의 부품표처럼 네 칸으로 나눠 보면 이렇습니다. <code>Presentational</code> 컴포넌트는 데이터를 받아 화면에 보여주기만 하고 로직은 갖지 않습니다. <code>Container</code> 컴포넌트는 데이터를 가져오고 상태를 관리하는 로직을 담당합니다. <code>Layout</code> 컴포넌트는 다른 컴포넌트들을 배치하는 틀 역할을 하며, <code>Reusable UI</code> 컴포넌트는 버튼이나 입력창처럼 어디서든 쓰이는 범용 부품입니다. 이렇게 역할을 나누면 각 블록이 딱 한 가지 책임만 지게 되어 설계가 명확해집니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 06</span><h3>동작 원리: props를 내려주고 이벤트로 알린다</h3></div>
+      <p class="key-msg">부모는 props로 데이터를 자식에게 내려주고, 자식은 이벤트로 부모에게 알리는 단방향 흐름으로 동작한다.</p>
+      <div class="flow">
+        <span class="node n-fe">부모 컴포넌트 (state)</span><span class="arrow">→</span>
+        <span class="node n-api">props (데이터 전달)</span><span class="arrow">→</span>
+        <span class="node n-fe">자식 컴포넌트</span><span class="arrow">→</span>
+        <span class="node n-api">event (알림)</span><span class="arrow">→</span>
+        <span class="node n-be">부모가 상태 변경</span><span class="arrow">→</span>
+        <span class="node n-fe">props 재전달</span>
+      </div>
+      <p class="body">컴포넌트들은 부모와 자식 관계로 연결되어 하나의 트리를 이루는데, 데이터는 항상 부모에서 자식으로 <span class="fe-t">props</span>를 통해 전달됩니다. 자식은 자신의 상태를 직접 바꾸지 않고, 대신 <span class="be-t">이벤트</span>를 발생시켜 부모에게 &ldquo;이런 일이 일어났다&rdquo;고 알립니다. 위에서 아래로는 데이터, 아래에서 위로는 알림만 — 이 단방향 흐름 덕분에 데이터가 어디서 와서 어디로 가는지 추적하기 쉬워지고, 예상치 못한 부작용이 줄어듭니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 07</span><h3>헷갈리는 경계: 상태는 어디에 둘 것인가</h3></div>
+      <p class="key-msg">컴포넌트 트리가 깊어질수록 상태를 어디에 둘지 헷갈리며, 너무 잘게 쪼개는 것도 문제가 될 수 있다.</p>
+      <p class="body">트리가 5단 이상 깊어지면, 가장 깊은 곳의 작은 블록 하나가 물음표를 띄운 채 어느 조상에게 상태를 맡겨야 할지 갈팡질팡하게 됩니다. 여러 자식이 공유해야 하는 상태는 흔히 <strong>상태 끌어올리기</strong>(lifting state up)라는 방법으로 공통 조상에 두고 내려보내지만, 무작정 최상위에 몰아넣으면 다시 거대한 덩어리 문제로 되돌아갑니다. 반대로 컴포넌트를 지나치게 잘게 쪼개면 props를 여러 단계 거쳐 전달하는 번거로움이 커집니다. 한쪽 접시에는 &ldquo;과도한 분리&rdquo;, 다른 쪽에는 &ldquo;적절한 균형&rdquo;이 올라간 저울 — 너무 잘게 쪼개도, 너무 뭉쳐도 문제이므로 적절한 크기의 균형을 찾는 감각이 필요합니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 08</span><h3>코드로 보는 컴포넌트: 작은 함수 하나</h3></div>
+      <p class="key-msg">실제 컴포넌트 코드는 props를 받아 화면 조각 하나를 그려내는 작은 함수의 형태를 띤다.</p>
+      <div class="code-pair">
+        <div class="code-card fe-c">
+          <div class="code-title">Button.jsx — 블록의 설계도</div>
+          <pre><span class="cm">// props를 받아 화면 조각을 그려내는 작은 함수</span>
+<span class="kw">function</span> Button({ label, onClick }) {
+  <span class="kw">return</span> &lt;button onClick={onClick}&gt;{label}&lt;/button&gt;;
+}</pre>
+        </div>
+        <div class="code-card be-c">
+          <div class="code-title">App.jsx — 블록의 재사용</div>
+          <pre><span class="cm">// 같은 블록, 다른 props로 어디서든 재사용</span>
+&lt;Button label=<span class="st">"저장"</span> onClick={save} /&gt;
+&lt;Button label=<span class="st">"취소"</span> onClick={cancel} /&gt;</pre>
+        </div>
+      </div>
+      <p class="body">이 함수는 <code>label</code>과 <code>onClick</code>이라는 props를 받아, 그 값에 맞는 버튼 마크업을 반환합니다. 이 함수 하나가 곧 하나의 컴포넌트이며, 어느 화면에서 어떤 label과 onClick을 넘기든 똑같은 방식으로 재사용됩니다. props로 들어오는 부분이 블록의 &lsquo;끼우는 홈&rsquo;이고, 반환되는 마크업이 블록의 &lsquo;겉모습&rsquo;인 셈입니다.</p>
+    </article>
+  </section>
+
+  <!-- ================= PART 3 : 컷 09 ~ 12 ================= -->
+  <section class="part">
+    <div class="part-label">PART 3 / 3 &mdash; 실전 감각과 요약 (컷 09&ndash;12)</div>
+    <figure class="fourcut">
+      <button class="zoom-btn" type="button" data-zoom-src="imgs/fourcut-03.png" aria-label="이미지 크게 보기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16" y2="16"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        크게 보기
+      </button>
+      <img src="imgs/fourcut-03.png" alt="컷 9~12: 금이 간 God Component와 하드코딩 경고, 컴포넌트화 트레이드오프 비교표, 반복과 독립성으로 판단하는 분리 기준, 완성된 레고 모형과 핵심 요약 칩">
+      <figcaption>fourcut-03 &mdash; 컷 09 ~ 12</figcaption>
+    </figure>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 09</span><h3>흔한 실수: God Component와 하드코딩</h3></div>
+      <p class="key-msg">하나의 컴포넌트가 너무 많은 책임을 떠맡거나, 값을 하드코딩하면 재사용성과 유지보수성이 무너진다.</p>
+      <div class="warn-box">
+        <div class="warn-label">⚠ god component &amp; hardcoded values</div>
+        <p>God Component란 하나의 컴포넌트가 데이터 조회, 상태 관리, 화면 렌더링, 이벤트 처리까지 모든 책임을 떠맡아버린 상태입니다. 무게를 못 이겨 금이 간 거대 블록처럼, 작은 수정 하나에도 전체가 흔들리고 재사용이 불가능해집니다. props로 받아야 할 값을 컴포넌트 안에 직접 못처럼 박아버리는 하드코딩도 마찬가지로, 다른 화면에서 같은 컴포넌트를 다른 값으로 재사용할 수 없게 만듭니다.</p>
+        <div class="ok-label">✓ single responsibility + open props</div>
+        <p>좋은 컴포넌트는 책임을 최소한으로 좁히고, 달라질 수 있는 값은 반드시 props로 열어둡니다. 작고 단정한 블록들이 나란히 줄지어 각자의 역할만 맡는 상태 — 그것이 목표입니다.</p>
+      </div>
+      <p class="body">여러 색과 여러 아이콘을 한 몸에 다닥다닥 붙인 채 금이 가 있는 거대 블록을 상상해 보세요. 책임 과잉과 하드코딩, 이 둘을 경계하는 것이 컴포넌트 설계의 첫 번째 위생 수칙입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 10</span><h3>트레이드오프 비교표: 공짜 이득은 없다</h3></div>
+      <p class="key-msg">컴포넌트화는 재사용성과 유지보수성을 높이지만 초기 설계 비용이라는 대가를 치른다.</p>
+      <div class="table-scroll">
+        <table class="tradeoff">
+          <caption>no free lunch — invest in design time</caption>
+          <thead>
+            <tr>
+              <th>비교 축</th>
+              <th class="be-th">컴포넌트화 안 함</th>
+              <th class="fe-th">컴포넌트화 함</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="axis">재사용성</td><td>같은 UI도 매번 다시 작성</td><td>한 번 만들어 여러 화면에서 재사용</td></tr>
+            <tr><td class="axis">테스트 용이성</td><td>화면 전체를 통째로 검증</td><td>조각 단위로 떼어 개별 테스트</td></tr>
+            <tr><td class="axis">유지보수성</td><td>수정 영향 범위 예측 어려움</td><td>해당 블록만 고치면 됨</td></tr>
+            <tr><td class="axis">초기 설계 비용</td><td>낮음 — 일단 빠르게 작성</td><td>높음 — 쪼개는 단위와 props 설계에 시간 투자</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="body">컴포넌트화는 재사용성, 테스트 용이성, 장기적인 유지보수성을 크게 끌어올립니다. 다만 처음부터 어떤 단위로 쪼갤지 고민하고 props 인터페이스를 설계하는 데 시간이 더 들기 때문에, 초기 설계 비용은 오히려 더 높아질 수 있습니다. 이 트레이드오프를 이해하면 작은 프로토타입에서는 대충 만들고, 규모가 커질 화면일수록 컴포넌트 설계에 시간을 투자하는 균형 잡힌 선택을 할 수 있습니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 11</span><h3>언제 무엇을 쪼개나</h3></div>
+      <p class="key-msg">화면에서 반복되거나 독립적으로 테스트하고 싶은 단위가 있다면 그것이 컴포넌트로 분리할 신호다.</p>
+      <div class="debug-pair">
+        <div class="debug-card fe-d">
+          <h4>🔍 이런 신호가 보이면 → <span class="fe-t">컴포넌트로 분리</span></h4>
+          <ul>
+            <li>같은 모양이 여러 번 반복해서 나타난다</li>
+            <li>다른 부분과 독립적으로 수정하고 싶다</li>
+            <li>따로 떼어 테스트하고 싶은 단위다</li>
+          </ul>
+        </div>
+        <div class="debug-card be-d">
+          <h4>🔍 이런 경우라면 → <span class="be-t">쪼갤 필요 없음</span></h4>
+          <ul>
+            <li>딱 한 번만 등장하는 단순한 조각이다</li>
+            <li>다른 부분과 강하게 얽혀 있다</li>
+            <li>분리해도 재사용할 곳이 없다</li>
+          </ul>
+        </div>
+      </div>
+      <p class="body">화면 안에서 같은 모양의 카드가 세 개, 네 개 반복되어 나타난다면 그것은 컴포넌트로 분리하라는 강한 신호입니다. 또한 어떤 부분을 다른 부분과 독립적으로 수정하거나 테스트하고 싶다면, 그 경계 자체가 컴포넌트의 경계가 되어야 합니다. 반대로 딱 한 번만 등장하고 다른 부분과 강하게 얽혀 있는 조각까지 억지로 분리할 필요는 없습니다. &ldquo;반복되는가? 독립적으로 다루고 싶은가?&rdquo; — 이 두 질문이 분기점입니다.</p>
+    </article>
+
+    <article class="scene">
+      <div class="scene-head"><span class="cut-no">컷 12</span><h3>실전 판별과 핵심 요약: 다른 곳에서도 쓸 수 있는가</h3></div>
+      <p class="key-msg">&ldquo;이 UI 조각이 다른 곳에서도 쓰일 수 있는가&rdquo;라는 질문 하나로 컴포넌트 여부를 판별할 수 있다.</p>
+      <p class="body">어떤 UI 조각을 컴포넌트로 만들지 고민될 때 가장 실용적인 질문은 이것입니다 — <span class="fe-t">&ldquo;이 조각이 다른 화면이나 다른 맥락에서도 쓰일 수 있는가?&rdquo;</span> 그렇다고 답할 수 있다면 그 조각은 독립된 컴포넌트로 분리할 가치가 있습니다. 씬 01에서 흩어졌던 조각들이 다시 합쳐져 완성된 레고 모형이 되었듯, 컴포넌트는 UI와 로직을 하나로 묶은 재사용 단위이며 props와 이벤트로 부모 자식이 소통하고, 역할에 따라 종류가 나뉘고, 책임을 과하게 떠맡지 않도록 경계해야 하며, 재사용성과 설계 비용 사이의 트레이드오프를 이해하는 것이 핵심입니다.</p>
+      <div class="chips">
+        <span class="chip">정의</span>
+        <span class="chip">props·이벤트</span>
+        <span class="chip">종류</span>
+        <span class="chip">책임 분리</span>
+        <span class="chip">트레이드오프</span>
+        <span class="chip">판별법</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="outro">
+    <div class="fin">작은 조각이 모여 큰 화면이 된다</div>
+    <p>컴포넌트는 겉모습과 동작을 하나로 묶은 레고 블록이고, 화면은 그 블록들이 트리로 조립된 결과물입니다.<br>블록을 잘 설계해두면, 그 조각들이 모여 언제든 새로운 화면을 빠르게 조립해낼 수 있습니다.</p>
+    <span class="sig">small blocks, big screens</span>
+  </div>
+
+</div>
+
+<!-- ================= 이미지 팝업 뷰어 ================= -->
+<div class="viewer-overlay" id="viewer" role="dialog" aria-modal="true" aria-label="이미지 크게 보기">
+  <div class="viewer-box">
+    <div class="viewer-scale" id="viewerScale">100%</div>
+    <div class="viewer-top">
+      <button class="v-btn" id="viewerReset" type="button" title="원본 크기 (100%)">1:1</button>
+      <button class="v-btn" id="viewerFit" type="button" title="화면에 맞추기">Fit</button>
+      <button class="v-btn" id="viewerClose" type="button" title="닫기 (Esc)">✕</button>
+    </div>
+    <div class="viewer-stage" id="viewerStage">
+      <img id="viewerImg" src="" alt="확대 이미지">
+    </div>
+    <div class="viewer-hint">마우스 휠: 확대/축소 · 드래그: 이동 · Esc: 닫기</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var overlay = document.getElementById('viewer');
+  var stage   = document.getElementById('viewerStage');
+  var img     = document.getElementById('viewerImg');
+  var scaleEl = document.getElementById('viewerScale');
+
+  var scale = 1, tx = 0, ty = 0;
+  var MIN_SCALE = 0.1, MAX_SCALE = 10;
+  var dragging = false, lastX = 0, lastY = 0;
+
+  function apply() {
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    scaleEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  function centerAt(s) {
+    scale = s;
+    tx = (stage.clientWidth  - img.naturalWidth  * scale) / 2;
+    ty = (stage.clientHeight - img.naturalHeight * scale) / 2;
+    apply();
+  }
+
+  function fitToStage() {
+    var s = Math.min(
+      stage.clientWidth  / img.naturalWidth,
+      stage.clientHeight / img.naturalHeight,
+      1
+    );
+    centerAt(s);
+  }
+
+  function open(src) {
+    overlay.classList.add('open');
+    document.body.classList.add('viewer-lock');
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      centerAt(1); // 원본 사이즈로 시작
+    } else {
+      img.onload = function () { centerAt(1); };
+    }
+  }
+
+  function close() {
+    overlay.classList.remove('open');
+    document.body.classList.remove('viewer-lock');
+    dragging = false;
+    stage.classList.remove('dragging');
+  }
+
+  // 크게 보기 버튼들
+  document.querySelectorAll('.zoom-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      open(btn.getAttribute('data-zoom-src'));
+    });
+  });
+
+  // 마우스 휠 줌 (커서 위치 기준)
+  stage.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    var rect = stage.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    factor = next / scale;
+    tx = mx - (mx - tx) * factor;
+    ty = my - (my - ty) * factor;
+    scale = next;
+    apply();
+  }, { passive: false });
+
+  // 드래그 이동
+  stage.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    stage.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    tx += e.clientX - lastX;
+    ty += e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    apply();
+  });
+  window.addEventListener('mouseup', function () {
+    dragging = false;
+    stage.classList.remove('dragging');
+  });
+
+  // 더블클릭: 원본(100%) ↔ Fit 토글
+  stage.addEventListener('dblclick', function () {
+    if (Math.abs(scale - 1) < 0.01) fitToStage();
+    else centerAt(1);
+  });
+
+  // 상단 버튼 / 배경 클릭 / Esc
+  document.getElementById('viewerReset').addEventListener('click', function () { centerAt(1); });
+  document.getElementById('viewerFit').addEventListener('click', fitToStage);
+  document.getElementById('viewerClose').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+  });
+})();
+</script>
+</body>
+</html>
